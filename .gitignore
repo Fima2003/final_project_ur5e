@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+
+# Environments
+venv/
+
+# Distributions
+build/
+dist/
+wheelhouse/
+*.egg-info/
+*.egg
+
+# Logs
+*.log
+
+# vscode
+.vscode/
