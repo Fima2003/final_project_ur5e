@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt  # Import matplotlib for plotting
 
 import mujoco
 import mujoco_viewer
-import os
 
 ##############################################################################
 # 1. UR5e DH Parameters & Closed-Form IK
 ##############################################################################
 
-# UR5e DH Parameters (in meters)
+# Verify these for UR5e (in meters):
 d1 = 0.1625
 a2 = -0.425
 a3 = -0.3922
@@ -30,8 +29,8 @@ def dh_transform(a, alpha, d, theta):
     st, ct = math.sin(theta), math.cos(theta)
     sa, ca = math.sin(alpha), math.cos(alpha)
     return np.array([
-        [ct,         -st * ca,       st * sa,   a * ct],
-        [st,          ct * ca,      -ct * sa,   a * st],
+        [ct,         -st*ca,       st*sa,   a*ct],
+        [st,          ct*ca,      -ct*sa,   a*st],
         [0,             sa,          ca,      d],
         [0,              0,           0,      1]
     ], dtype=float)
@@ -43,11 +42,11 @@ def partial_fk_joint3(t1, t2, t3):
     Using the first 3 joints of UR5e with the chosen DH convention.
     """
     # T01
-    T01 = dh_transform(0, math.pi / 2, d1, t1)
+    T01 = dh_transform(0,       math.pi/2, d1, t1)
     # T12
-    T12 = dh_transform(a2, 0, 0, t2)
+    T12 = dh_transform(a2,      0,         0,  t2)
     # T23
-    T23 = dh_transform(a3, 0, 0, t3)
+    T23 = dh_transform(a3,      0,         0,  t3)
     return T01 @ T12 @ T23
 
 
@@ -59,7 +58,12 @@ def wrist_angles_from_T(T_j3_ee):
     Adjust if your D-H frames or wrist axes differ from this assumption!
     """
     R = T_j3_ee[:3, :3]
-    # Typical UR wrist angles extraction
+    # In a typical UR kinematic approach:
+    #  t4 rotates about Z
+    #  t5 rotates about Y
+    #  t6 rotates about X
+    # This snippet is illustrative; your actual frames may differ.
+
     # t5 = arccos(R[2,2])  (watch sign, singularities)
     # For numerical stability:
     cos_t5 = R[2, 2]
@@ -95,7 +99,7 @@ def ur5e_ik(T_des):
     wy = py - d6 * ez[1]
     wz = pz - d6 * ez[2]
 
-    # Gather solutions
+    # We'll gather solutions here:
     solutions = []
 
     # 1) Theta1 candidates
@@ -103,18 +107,24 @@ def ur5e_ik(T_des):
     t1_candidates = [shoulder_1, shoulder_1 + math.pi]
 
     for t1 in t1_candidates:
-        # Compute r, s for triangle involving link2, link3
-        r = math.sqrt(wx ** 2 + wy ** 2)
+        # compute r, s for triangle involving link2, link3
+        r = math.sqrt(wx**2 + wy**2)
+        # shift by first link offset
+        # in some references, r might be: r - a1 if there's an a1 != 0
+        # but with standard UR5e, a1=0, so we skip that.
         s = wz - d1
 
-        # Law of cosines for t3
-        D = (r ** 2 + s ** 2 - a2 ** 2 - a3 ** 2) / (2 * a2 * a3)
-        D = max(min(D, 1.0), -1.0)  # clamp
+        # law of cosines for t3
+        # distance^2 = a2^2 + a3^2 + 2*a2*a3*cos(t3)
+        # D = (r^2 + s^2 - a2^2 - a3^2)/(2*a2*a3)
+        D = (r**2 + s**2 - a2**2 - a3**2) / (2*a2*a3)
+        # clamp D in [-1, 1]
+        D = max(min(D, 1.0), -1.0)
 
         try:
             phi3 = math.acos(D)
         except ValueError:
-            # No real solution if |D| > 1
+            # No real solution if |D|>1
             continue
 
         # t3 can be +phi3 or -phi3
@@ -122,24 +132,30 @@ def ur5e_ik(T_des):
 
         for t3 in t3_list:
             # Solve for t2 using geometry:
-            k1 = a2 + a3 * math.cos(t3)
-            k2 = a3 * math.sin(t3)
+            #   k1 = a2 + a3*cos(t3)
+            #   k2 = a3*sin(t3)
+            #   r = sqrt(wx^2 + wy^2), s = wz - d1
+            k1 = a2 + a3*math.cos(t3)
+            k2 = a3*math.sin(t3)
 
-            # Compute t2
-            denom = (r * k1 + s * k2)
-            numer = (s * k1 - r * k2)
+            # We want:
+            #   r = k1*cos(t2) + k2*sin(t2)
+            #   s = k1*sin(t2) - k2*cos(t2)
+            # => t2 = atan2( s*k1 - r*k2, r*k1 + s*k2 )
+            denom = (r*k1 + s*k2)
+            numer = (s*k1 - r*k2)
             t2 = math.atan2(numer, denom)
 
-            # Partial forward kinematics to joint3
+            # Now partial forward kinematics to joint3
             T_base_j3 = partial_fk_joint3(t1, t2, t3)
-            # T_j3_ee = inv(T_base_j3) * T_des
+            # T_j3_ee = inv(T_base_j3)*T_des
             T_j3_ee = np.linalg.inv(T_base_j3) @ T_des
 
             t4, t5, t6 = wrist_angles_from_T(T_j3_ee)
 
             sol = np.array([t1, t2, t3, t4, t5, t6], dtype=float)
-            # Wrap angles to [-pi, pi]
-            sol = (sol + math.pi) % (2 * math.pi) - math.pi
+            # Wrap angles to [-pi, pi] if desired
+            sol = (sol + math.pi) % (2*math.pi) - math.pi
             solutions.append(sol)
 
     return solutions
@@ -149,9 +165,8 @@ def ur5e_ik(T_des):
 # 2. Combine with the MuJoCo Scene + Viewer
 ##############################################################################
 
-
 def main():
-    XML_PATH = "ur5e_scene.xml"  # Path to your MuJoCo scene
+    XML_PATH = "ur5e_scene_backup.xml"  # Path to your MuJoCo scene
     model = mujoco.MjModel.from_xml_path(XML_PATH)
     data = mujoco.MjData(model)
 
@@ -200,23 +215,10 @@ def main():
         chosen_sol = sol_list[0]  # or apply your joint-limit filtering here
         print("Chosen solution (radians):", chosen_sol)
 
-        # 3) Set arm joint angles in MuJoCo
+        # 3) Set joint angles in MuJoCo
         data.qpos[:6] = chosen_sol
 
-        # 4) Set gripper's control input based on desired state
-        # Define desired gripper state: 'open', 'closed', 'half-open'
-        desired_gripper_state = 'closed'  # Change as needed
-
-        if desired_gripper_state == 'open':
-            data.ctrl[6] = 0  # Fully open
-        elif desired_gripper_state == 'closed':
-            data.ctrl[6] = 255    # Fully closed
-        elif desired_gripper_state == 'half-open':
-            data.ctrl[6] = 128  # Half-open
-        else:
-            data.ctrl[6] = 0    # Default to closed if unknown state
-
-        # 5) Recompute forward kinematics in MuJoCo
+        # 4) Recompute forward kinematics in MuJoCo
         mujoco.mj_forward(model, data)
 
     # 5) Simulation and Data Recording Loop
@@ -228,16 +230,10 @@ def main():
         # Render in the viewer
         viewer.render()
 
-        # Optionally, change gripper state at specific times
-        # Example: Close gripper halfway through the simulation
-        if frame_idx == frames_to_record // 2:
-            print("Closing gripper at halfway point.")
-            data.ctrl[6] = 0  # Fully close
-
         # Record joint positions and velocities
-        # Assuming 14 joints: 6 arm + 8 gripper
-        current_positions = data.qpos.copy()    # Shape: (14,)
-        current_velocities = data.qvel.copy()   # Shape: (14,)
+        # Assuming the first 6 joints correspond to the UR5e arm
+        current_positions = data.qpos[:6].copy()
+        current_velocities = data.qvel[:6].copy()
         joint_positions.append(current_positions)
         joint_velocities.append(current_velocities)
 
@@ -250,79 +246,41 @@ def main():
     viewer.close()
 
     # 7. Convert recorded data to numpy arrays for plotting
-    joint_positions = np.array(joint_positions)      # Shape: (frames, 14)
-    joint_velocities = np.array(joint_velocities)    # Shape: (frames, 14)
+    joint_positions = np.array(joint_positions)      # Shape: (frames, 6)
+    joint_velocities = np.array(joint_velocities)    # Shape: (frames, 6)
 
     # 8. Create time array for plotting
     time_array = np.linspace(0, DURATION_SECONDS, frames_to_record)
 
-    # 9. Plot Arm Joint Positions
-    # Check if the 'graphs' folder exists, if not, create it
-    graphs_folder = './graphs'
-    if not os.path.exists(graphs_folder):
-        os.makedirs(graphs_folder)
-    
+    # 9. Plot Joint Positions
     plt.figure(figsize=(12, 8))
     for joint_idx in range(6):
         plt.plot(time_array, joint_positions[:, joint_idx],
-                 label=f'Arm Joint {joint_idx + 1} Position')
-    plt.title('UR5e Arm Joint Positions Over Time')
+                 label=f'Joint {joint_idx + 1} Position')
+    plt.title('UR5e Joint Positions Over Time')
     plt.xlabel('Time (s)')
     plt.ylabel('Position (radians)')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/arm_joint_positions.png')
+    plt.savefig('joint_positions.png')  # Save the plot as a PNG file
     plt.show()  # Display the plot
 
-    # 10. Plot Gripper Joint Positions
-    plt.figure(figsize=(12, 8))
-    for joint_idx in range(6, 14):
-        plt.plot(time_array, joint_positions[:, joint_idx],
-                 label=f'Gripper Joint {joint_idx - 5} Position')
-    plt.title('UR5e Gripper Joint Positions Over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Position (radians)')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/gripper_joint_positions.png')
-    plt.show()  # Display the plot
-
-    # 11. Plot Arm Joint Velocities
+    # 10. Plot Joint Velocities
     plt.figure(figsize=(12, 8))
     for joint_idx in range(6):
         plt.plot(
-            time_array, joint_velocities[:, joint_idx], label=f'Arm Joint {joint_idx + 1} Velocity')
-    plt.title('UR5e Arm Joint Velocities Over Time')
+            time_array, joint_velocities[:, joint_idx], label=f'Joint {joint_idx + 1} Velocity')
+    plt.title('UR5e Joint Velocities Over Time')
     plt.xlabel('Time (s)')
     plt.ylabel('Velocity (radians/sec)')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/arm_joint_velocities.png')
+    plt.savefig('joint_velocities.png')  # Save the plot as a PNG file
     plt.show()  # Display the plot
 
-    # 12. Plot Gripper Joint Velocities
-    plt.figure(figsize=(12, 8))
-    for joint_idx in range(6, 14):
-        plt.plot(
-            time_array, joint_velocities[:, joint_idx], label=f'Gripper Joint {joint_idx - 5} Velocity')
-        plt.legend()
-    plt.title('UR5e Gripper Joint Velocities Over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Velocity (radians/sec)')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/gripper_joint_velocities.png')
-    plt.show()  # Display the plot
-
-    print("Plots saved as 'arm_joint_positions.png', 'gripper_joint_positions.png', 'arm_joint_velocities.png', and 'gripper_joint_velocities.png'.")
+    print("Plots saved as 'joint_positions.png' and 'joint_velocities.png'.")
 
 
 if __name__ == "__main__":
