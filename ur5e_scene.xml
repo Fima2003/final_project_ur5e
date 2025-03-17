@@ -72,6 +72,9 @@
         </default>
       </default>
     </default>
+    <default class="soft">
+      <geom type="mesh" contype="1" conaffinity="1" friction="1 0.1 0.1" />
+    </default>
   </default>
 
   <visual>
@@ -130,6 +133,9 @@
     <mesh class="g2f85" file="pad.stl" />
     <mesh class="g2f85" file="silicone_pad.stl" />
     <mesh class="g2f85" file="spring_link.stl" />
+
+    <material name="soft_material" rgba="0.9 0.3 0.3 1" />
+    <mesh name="soft_cube" file="soft_cube.stl" scale="0.2 0.2 0.2" />
   </asset>
 
   <worldbody>
@@ -321,6 +327,12 @@
         </body>
       </body>
     </body>
+    
+    <body name="soft_cube" pos="-0.5 0.5 0.21" mocap="true">
+      <inertial mass="0.1" pos="0 0 0" />
+      <geom class="soft" mesh="soft_cube" material="soft_material" />
+    </body>
+
 
     <!-- Surrounding walls -->
     <!-- <geom name="wall1" pos="0 -1.01 0.5" size="1.02 0.01 1" type="box" material="wall" />
@@ -328,14 +340,6 @@
     <geom name="wall3" pos="1.01 0 0.5" size="0.01 1.02 0.5" type="box" material="wall" /> -->
   </worldbody>
 
-  <!-- <contact>
-    <exclude body1="g2f85_base" body2="left_driver" />
-    <exclude body1="g2f85_base" body2="right_driver" />
-    <exclude body1="g2f85_base" body2="left_spring_link" />
-    <exclude body1="g2f85_base" body2="right_spring_link" />
-    <exclude body1="right_coupler" body2="right_follower" />
-    <exclude body1="left_coupler" body2="left_follower" />
-  </contact> -->
 
   <tendon>
     <fixed name="split">
@@ -367,7 +371,7 @@
   </actuator>
 
   <keyframe>
-    <key name="home" qpos="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0 0 0 0 -1.5708 0 0 0 0"
+    <key name="home" qpos="0 -1.5708 1.5708 -1.5708 -1.5708 0 0 0 0 -1.5708 0 0 0 0"
       ctrl="-1.5708 -1.5708 -1.5708 -1.5708 1.5708 0 -1.5708" />
   </keyframe>
 

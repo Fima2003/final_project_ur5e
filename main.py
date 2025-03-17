@@ -1,328 +1,246 @@
 import math
+from setup import setup
 import numpy as np
-import matplotlib.pyplot as plt  # Import matplotlib for plotting
+import matplotlib.pyplot as plt
 
 import mujoco
-import mujoco_viewer
-import os
 
-##############################################################################
-# 1. UR5e DH Parameters & Closed-Form IK
-##############################################################################
-
-# UR5e DH Parameters (in meters)
-d1 = 0.1625
-a2 = -0.425
-a3 = -0.3922
-d4 = 0.1333
-d5 = 0.0997
-d6 = 0.0996
+from utils import get_soft_cube_position
+import mink
+from mink.contrib import TeleopMocap
+from loop_rate_limiters import RateLimiter
 
 
 def dh_transform(a, alpha, d, theta):
     """
-    Standard Denavit-Hartenberg matrix.
+    Computes the standard Denavit–Hartenberg transformation matrix.
     a: link length
-    alpha: link twist
+    alpha: link twist (radians)
     d: link offset
-    theta: joint angle
+    theta: joint angle (radians)
     """
-    st, ct = math.sin(theta), math.cos(theta)
-    sa, ca = math.sin(alpha), math.cos(alpha)
+    st = math.sin(theta)
+    ct = math.cos(theta)
+    sa = math.sin(alpha)
+    ca = math.cos(alpha)
     return np.array([
-        [ct,         -st * ca,       st * sa,   a * ct],
-        [st,          ct * ca,      -ct * sa,   a * st],
-        [0,             sa,          ca,      d],
-        [0,              0,           0,      1]
+        [ct, -st * ca, st * sa, a * ct],
+        [st, ct * ca, -ct * sa, a * st],
+        [0,    sa,      ca,     d],
+        [0,     0,       0,     1]
     ], dtype=float)
-
-
-def partial_fk_joint3(t1, t2, t3):
-    """
-    Compute the transform from the base to the 'joint 3' axis (before wrist joints).
-    Using the first 3 joints of UR5e with the chosen DH convention.
-    """
-    # T01
-    T01 = dh_transform(0, math.pi / 2, d1, t1)
-    # T12
-    T12 = dh_transform(a2, 0, 0, t2)
-    # T23
-    T23 = dh_transform(a3, 0, 0, t3)
-    return T01 @ T12 @ T23
-
-
-def wrist_angles_from_T(T_j3_ee):
-    """
-    Extract t4, t5, t6 from the transform of the last 3-joint wrist.
-    (Assumes Z-Y-X or a similar convention for the UR wrist.)
-
-    Adjust if your D-H frames or wrist axes differ from this assumption!
-    """
-    R = T_j3_ee[:3, :3]
-    # Typical UR wrist angles extraction
-    # t5 = arccos(R[2,2])  (watch sign, singularities)
-    # For numerical stability:
-    cos_t5 = R[2, 2]
-    cos_t5 = max(min(cos_t5, 1.0), -1.0)  # clamp
-    t5 = math.acos(cos_t5)
-
-    # near singularities:
-    if abs(math.sin(t5)) < 1e-6:
-        # fall-back approach
-        t4 = 0.0
-        t6 = math.atan2(-R[1, 0], R[0, 0])
-    else:
-        t4 = math.atan2(R[1, 2], R[0, 2])
-        t6 = math.atan2(R[2, 1], -R[2, 0])
-
-    return (t4, t5, t6)
 
 
 def ur5e_ik(T_des):
     """
-    Compute all possible closed-form IK solutions for the UR5e, given:
-      T_des: 4x4 transform for the end-effector in the base frame.
-    Returns a list of possible 6-vector solutions [t1, t2, t3, t4, t5, t6].
+    Computes all possible closed-form inverse kinematics solutions for the UR5e.
+
+    Input:
+      T_des: a 4x4 homogeneous transform representing the desired end-effector pose 
+             in the robot's base frame.
+
+    Returns:
+      A list of candidate solutions. Each solution is a 6-element numpy array representing 
+      joint angles [t1, t2, t3, t4, t5, t6] in radians.
+      If the target is unreachable, no solution is returned for that branch.
     """
+    # UR5e DH parameters (in meters)
+    d1 = 0.1625
+    a2 = -0.425    # note: negative as per your model convention
+    a3 = -0.3922
+    d6 = 0.0996
+
+    # Extract desired end-effector position and rotation from T_des
     px, py, pz = T_des[0, 3], T_des[1, 3], T_des[2, 3]
     R_des = T_des[:3, :3]
+    # The end-effector's local z-axis (third column of the rotation matrix)
+    ez = R_des[:, 2]
 
-    # end-effector's local z-axis in world coords
-    ez = R_des @ np.array([0, 0, 1])
-
-    # wrist center (subtract d6 along the z-axis)
+    # Compute wrist center position by subtracting d6 along ez
     wx = px - d6 * ez[0]
     wy = py - d6 * ez[1]
     wz = pz - d6 * ez[2]
 
-    # Gather solutions
     solutions = []
 
-    # 1) Theta1 candidates
-    shoulder_1 = math.atan2(wy, wx)
-    t1_candidates = [shoulder_1, shoulder_1 + math.pi]
+    # Solve for theta1 (base joint) candidates:
+    t1_a = math.atan2(wy, wx)
+    t1_b = t1_a + math.pi
+    t1_candidates = [t1_a, t1_b]
 
     for t1 in t1_candidates:
-        # Compute r, s for triangle involving link2, link3
-        r = math.sqrt(wx ** 2 + wy ** 2)
+        # Compute r and s: distance components from base to wrist center
+        r = math.sqrt(wx**2 + wy**2)
         s = wz - d1
 
-        # Law of cosines for t3
-        D = (r ** 2 + s ** 2 - a2 ** 2 - a3 ** 2) / (2 * a2 * a3)
-        D = max(min(D, 1.0), -1.0)  # clamp
+        # Compute D using the law of cosines for the triangle formed by links a2 and a3:
+        D = (r**2 + s**2 - a2**2 - a3**2) / (2 * a2 * a3)
 
-        try:
-            phi3 = math.acos(D)
-        except ValueError:
-            # No real solution if |D| > 1
+        # If D is outside the range [-1, 1], the target is unreachable for this candidate.
+        if D < -1.0 or D > 1.0:
             continue
 
-        # t3 can be +phi3 or -phi3
-        t3_list = [phi3, -phi3]
-
-        for t3 in t3_list:
-            # Solve for t2 using geometry:
+        # Two possible solutions for theta3 (elbow configuration)
+        phi3 = math.acos(D)
+        for t3 in [phi3, -phi3]:
+            # Compute theta2 based on geometry:
             k1 = a2 + a3 * math.cos(t3)
             k2 = a3 * math.sin(t3)
+            t2 = math.atan2(s, r) - math.atan2(k2, k1)
 
-            # Compute t2
-            denom = (r * k1 + s * k2)
-            numer = (s * k1 - r * k2)
-            t2 = math.atan2(numer, denom)
+            # Forward kinematics from base to joint 3:
+            T01 = dh_transform(0, math.pi/2, d1, t1)
+            T12 = dh_transform(a2, 0, 0, t2)
+            T23 = dh_transform(a3, 0, 0, t3)
+            T_base_j3 = T01 @ T12 @ T23
 
-            # Partial forward kinematics to joint3
-            T_base_j3 = partial_fk_joint3(t1, t2, t3)
-            # T_j3_ee = inv(T_base_j3) * T_des
+            # Compute transformation from joint 3 to end-effector:
             T_j3_ee = np.linalg.inv(T_base_j3) @ T_des
+            R_wrist = T_j3_ee[:3, :3]
 
-            t4, t5, t6 = wrist_angles_from_T(T_j3_ee)
+            # Solve for wrist joint (t4, t5, t6) angles:
+            cos_t5 = R_wrist[2, 2]
+            # For safety, if cos_t5 is not within [-1, 1], skip this solution
+            if cos_t5 < -1.0 or cos_t5 > 1.0:
+                continue
 
+            t5 = math.acos(cos_t5)
+            if abs(math.sin(t5)) < 1e-6:
+                t4 = 0.0
+                t6 = math.atan2(-R_wrist[1, 0], R_wrist[0, 0])
+            else:
+                t4 = math.atan2(R_wrist[1, 2], R_wrist[0, 2])
+                t6 = math.atan2(R_wrist[2, 1], -R_wrist[2, 0])
+
+            # Construct the candidate solution vector and normalize angles to [-pi, pi]
             sol = np.array([t1, t2, t3, t4, t5, t6], dtype=float)
-            # Wrap angles to [-pi, pi]
             sol = (sol + math.pi) % (2 * math.pi) - math.pi
             solutions.append(sol)
 
     return solutions
 
 
-##############################################################################
-# 2. Combine with the MuJoCo Scene + Viewer
-##############################################################################
+def move_to_position(model, data, viewer, position, steps):
+    """
+    Moves the robot's end-effector to the given position using IK.
+    Since the robot is fixed, its base frame is the same as the world frame.
+    We apply a rotation offset to align the gripper with the object.
+    After interpolation, extra simulation steps are run to let the motion finish.
+    """
+    # Desired end-effector transform in world coordinates:
+    T_des = np.eye(4)
+    T_des[:3, 3] = position
+
+    # Apply a rotation offset: adjust by -pi/2 about the z-axis
+    R_offset = np.array([
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1]
+    ])
+    T_des[:3, :3] = R_offset
+    print(f"Desired T (world and robot base coincide):\n{T_des}")
+
+    # Compute IK directly using T_des:
+    solutions = ur5e_ik(T_des)
+    print(f"I found {len(solutions)} solutions to the given IK problem")
+    if not solutions:
+        print("No IK solution found for the target position:", position)
+        return
+
+    # Since the robot's arm joints are stored in data.qpos[0:6] (fixed base),
+    # select the best solution based on the current arm configuration:
+    current_arm = data.qpos[0:6].copy()
+    best_sol = min(
+        solutions, key=lambda sol: np.linalg.norm(sol - current_arm))
+
+    # Interpolate from current configuration to best_sol:
+    for i in range(steps + 1):
+        alpha = i / steps  # alpha goes from 0 (current) to 1 (target)
+        interp_conf = (1 - alpha) * current_arm + alpha * best_sol
+        data.qpos[0:6] = interp_conf
+
+        mujoco.mj_forward(model, data)
+        mujoco.mj_step(model, data)
+        viewer.render()
+
+    # Extra simulation steps to ensure the robot fully settles in the target position:
+    extra_steps = 500
+    for _ in range(extra_steps):
+        mujoco.mj_step(model, data)
+        viewer.render()
 
 
 def main():
-    XML_PATH = "ur5e_scene.xml"  # Path to your MuJoCo scene
-    model = mujoco.MjModel.from_xml_path(XML_PATH)
-    data = mujoco.MjData(model)
+    model, data, mink_config = setup()
+    configuration = mink_config["configuration"]
+    limits = mink_config["limits"]
+    tasks = mink_config["tasks"]
+    end_effector_task = mink_config["end_effector_task"]
 
-    # Create a viewer
-    viewer = mujoco_viewer.MujocoViewer(model, data)
+    mid = model.body("soft_cube").mocapid[0]
 
-    # Set the camera parameters before rendering:
-    viewer.cam.azimuth = 0        # horizontal angle, in degrees
-    viewer.cam.elevation = -20     # vertical angle, in degrees
-    viewer.cam.distance = 3.0       # zoom, distance from the center
-    viewer.cam.lookat[:] = [0.3, 0.0, 0.4]  # the point the camera looks at
+    # IK settings.
+    solver = "quadprog"
+    pos_threshold = 1e-4
+    ori_threshold = 1e-4
+    max_iters = 20
 
-    # Number of frames to record (simulation steps)
-    fps = 30
-    DURATION_SECONDS = 20
-    frames_to_record = DURATION_SECONDS * fps
+    # Initialize key_callback function.
+    key_callback = TeleopMocap(data)
 
-    # Initialize lists to store joint positions and velocities
-    # List of lists: each sublist contains positions of all joints at a step
-    joint_positions = []
-    # List of lists: each sublist contains velocities of all joints at a step
-    joint_velocities = []
+    with mujoco.viewer.launch_passive(
+        model=model,
+        data=data,
+        show_left_ui=False,
+        show_right_ui=False,
+        key_callback=key_callback,
+    ) as viewer:
+        mujoco.mjv_defaultFreeCamera(model, viewer.cam)
 
-    # Optional: set to the "home" keyframe
-    key_name = "home"
-    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, key_name)
-    if key_id >= 0:
-        data.qpos[:] = model.key_qpos[key_id].copy()
-        data.ctrl[:] = model.key_ctrl[key_id].copy()
-
-    # Desired end-effector transform T_des (4x4)
-    # Example target: x=0.9, y=0.1, z=0.9 with no rotation
-    T_des = np.eye(4)
-    T_des[0, 3] = 0.9
-    T_des[1, 3] = 0.1
-    T_des[2, 3] = 0.9
-
-    # 1) Compute closed-form IK
-    sol_list = ur5e_ik(T_des)
-    print(f"Found {len(sol_list)} possible IK solutions.")
-
-    # 2) Pick one solution (e.g., first valid)
-    if len(sol_list) == 0:
-        print("No valid IK solutions for the given T_des.")
-    else:
-        chosen_sol = sol_list[0]  # or apply your joint-limit filtering here
-        print("Chosen solution (radians):", chosen_sol)
-
-        # 3) Set arm joint angles in MuJoCo
-        data.qpos[:6] = chosen_sol
-
-        # 4) Set gripper's control input based on desired state
-        # Define desired gripper state: 'open', 'closed', 'half-open'
-        desired_gripper_state = 'closed'  # Change as needed
-
-        if desired_gripper_state == 'open':
-            data.ctrl[6] = 0  # Fully open
-        elif desired_gripper_state == 'closed':
-            data.ctrl[6] = 255    # Fully closed
-        elif desired_gripper_state == 'half-open':
-            data.ctrl[6] = 128  # Half-open
-        else:
-            data.ctrl[6] = 0    # Default to closed if unknown state
-
-        # 5) Recompute forward kinematics in MuJoCo
+        mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+        configuration.update(data.qpos)
         mujoco.mj_forward(model, data)
 
-    # 5) Simulation and Data Recording Loop
-    print("Starting simulation and data recording...")
-    for frame_idx in range(frames_to_record):
-        # Step the physics
-        mujoco.mj_step(model, data)
+        # Initialize the mocap target at the end-effector site.
+        mink.move_mocap_to_frame(
+            model, data, "soft_cube", "attachment_site", "site")
 
-        # Render in the viewer
-        viewer.render()
+        rate = RateLimiter(frequency=500.0, warn=False)
+        while viewer.is_running():
+            # Update task target.
+            T_wt = mink.SE3.from_mocap_name(model, data, "soft_cube")
+            end_effector_task.set_target(T_wt)
 
-        # Optionally, change gripper state at specific times
-        # Example: Close gripper halfway through the simulation
-        if frame_idx == frames_to_record // 2:
-            print("Closing gripper at halfway point.")
-            data.ctrl[6] = 0  # Fully close
+            # Continuously check for autonomous key movement.
+            key_callback.auto_key_move()
 
-        # Record joint positions and velocities
-        # Assuming 14 joints: 6 arm + 8 gripper
-        current_positions = data.qpos.copy()    # Shape: (14,)
-        current_velocities = data.qvel.copy()   # Shape: (14,)
-        joint_positions.append(current_positions)
-        joint_velocities.append(current_velocities)
+            # Compute velocity and integrate into the next configuration.
+            for i in range(max_iters):
+                vel = mink.solve_ik(
+                    configuration, tasks, rate.dt, solver, damping=1e-3, limits=limits
+                )
+                configuration.integrate_inplace(vel, rate.dt)
+                err = end_effector_task.compute_error(configuration)
+                pos_achieved = np.linalg.norm(err[:3]) <= pos_threshold
+                ori_achieved = np.linalg.norm(err[3:]) <= ori_threshold
+                if pos_achieved and ori_achieved:
+                    break
 
-        if frame_idx % 10 == 0:
-            print(f"Recorded frame {frame_idx + 1}/{frames_to_record}")
+            data.ctrl = configuration.q
+            mujoco.mj_step(model, data)
 
-    print("Simulation and data recording complete.")
+            # Visualize at fixed FPS.
+            viewer.sync()
+            rate.sleep()
 
-    # 6. Close the viewer
-    viewer.close()
+    # Create a target position 0.1 m above the cube.
+    # target_pos = cube_pos.copy()
+    # target_pos[2] += 0.1
 
-    # 7. Convert recorded data to numpy arrays for plotting
-    joint_positions = np.array(joint_positions)      # Shape: (frames, 14)
-    joint_velocities = np.array(joint_velocities)    # Shape: (frames, 14)
-
-    # 8. Create time array for plotting
-    time_array = np.linspace(0, DURATION_SECONDS, frames_to_record)
-
-    # 9. Plot Arm Joint Positions
-    # Check if the 'graphs' folder exists, if not, create it
-    graphs_folder = './graphs'
-    if not os.path.exists(graphs_folder):
-        os.makedirs(graphs_folder)
-    
-    plt.figure(figsize=(12, 8))
-    for joint_idx in range(6):
-        plt.plot(time_array, joint_positions[:, joint_idx],
-                 label=f'Arm Joint {joint_idx + 1} Position')
-    plt.title('UR5e Arm Joint Positions Over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Position (radians)')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/arm_joint_positions.png')
-    plt.show()  # Display the plot
-
-    # 10. Plot Gripper Joint Positions
-    plt.figure(figsize=(12, 8))
-    for joint_idx in range(6, 14):
-        plt.plot(time_array, joint_positions[:, joint_idx],
-                 label=f'Gripper Joint {joint_idx - 5} Position')
-    plt.title('UR5e Gripper Joint Positions Over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Position (radians)')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/gripper_joint_positions.png')
-    plt.show()  # Display the plot
-
-    # 11. Plot Arm Joint Velocities
-    plt.figure(figsize=(12, 8))
-    for joint_idx in range(6):
-        plt.plot(
-            time_array, joint_velocities[:, joint_idx], label=f'Arm Joint {joint_idx + 1} Velocity')
-    plt.title('UR5e Arm Joint Velocities Over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Velocity (radians/sec)')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/arm_joint_velocities.png')
-    plt.show()  # Display the plot
-
-    # 12. Plot Gripper Joint Velocities
-    plt.figure(figsize=(12, 8))
-    for joint_idx in range(6, 14):
-        plt.plot(
-            time_array, joint_velocities[:, joint_idx], label=f'Gripper Joint {joint_idx - 5} Velocity')
-        plt.legend()
-    plt.title('UR5e Gripper Joint Velocities Over Time')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Velocity (radians/sec)')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    # Save the plot as a PNG file
-    plt.savefig('./graphs/gripper_joint_velocities.png')
-    plt.show()  # Display the plot
-
-    print("Plots saved as 'arm_joint_positions.png', 'gripper_joint_positions.png', 'arm_joint_velocities.png', and 'gripper_joint_velocities.png'.")
+    # # Move the robot's gripper to the target position.
+    # move_to_position(model, data, viewer, target_pos, 500)
+    # # Close the viewer when done.
+    # viewer.close()
 
 
 if __name__ == "__main__":
