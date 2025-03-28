@@ -1,0 +1,56 @@
+<mujoco model="ur5e scene">
+  <include file="ur5e.xml" />
+
+  <statistic center="0.3 0 0.3" extent="0.8" meansize="0.08" />
+  <default>
+    <default class="soft">
+      <geom type="mesh" contype="1" conaffinity="1" friction="1.5 1.5 1.5" solimp="0.19 0.19 0.001"
+        solref="0.05 0.5" />
+    </default>
+  </default>
+  <size memory="50M"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0" />
+    <global azimuth="120" elevation="-20" />
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512"
+      height="512"
+      mark="cross" markrgb=".8 .8 .8" />
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" />
+    <material name="soft_material" rgba="0.9 0.3 0.3 1" />
+    <mesh name="soft_cube" file="soft_cube.stl" scale="0.02 0.05 0.06" />
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 1.5" directional="true" />
+    <geom name="floor" size="1 1 0.01" type="plane" material="grid" />
+
+    <body name="environment" pos="0 0 0.15">
+      <geom name="table" type="box" size="0.7 0.7 0.15" rgba="0.5 0.5 0.5 1" />
+      <geom name="wall1" type="box" size="0.7 0.01 0.3" pos="0 -0.7 0.15" rgba="0.5 0.5 0.5 1" />
+      <geom name="wall2" type="box" size="0.01 0.7 0.3" pos="0.7 0 0.15" rgba="0.5 0.5 0.5 1" />
+      <geom name="wall3" type="box" size="0.01 0.7 0.3" pos="-0.7 0 0.15" rgba="0.5 0.5 0.5 1" />
+    </body>
+
+
+    <body name="soft_cube" pos="0.5 -0.3 0.3">
+      <site name="soft_cube" />
+      <freejoint />
+      <inertial mass="0.9" pos="0 0 0" diaginertia="0.09 0.01 0.09" />
+      <geom name="soft_cube" class="soft" mesh="soft_cube" material="soft_material" />
+    </body>
+  </worldbody>
+
+  <sensor>
+    <fromto geom1="right_silicone_pad" geom2="soft_cube" cutoff="1" />
+  </sensor>
+
+  <keyframe>
+    <key name="home"
+      qpos="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0 0 0 0 0 0 0 0 0 0.3 0.1 0.33 0 0 0 0"
+      ctrl="0 0 0 0 0 0 0" />
+  </keyframe>
+</mujoco>
