@@ -52,7 +52,7 @@ def move_arm_to_position(
     tasks, limits, solver,
     rate, end_effector_task: mink.FrameTask, target_pose,
     pos_threshold, ori_threshold, max_iters,
-    recorded_times, recorded_qpos, recorded_qvel,   # <--- added parameters
+    recorded_times, recorded_qpos, recorded_qvel, recorded_gripper   # <-- added parameter
 ):
     """Moves the arm to the specified target pose using IK."""
     while viewer.is_running():
@@ -89,6 +89,7 @@ def move_arm_to_position(
         recorded_times.append(data.time)
         recorded_qpos.append(data.qpos.copy())
         recorded_qvel.append(data.qvel.copy())
+        recorded_gripper.append(data.site_xpos[model.site("attachment_site").id].copy())  # <-- record gripper pos
 
         viewer.sync()
         rate.sleep()
@@ -100,7 +101,7 @@ def move_arm_to_position(
 
 
 def squeeze_object(viewer, model, data, configuration, rate, d_gripper_box_threshold,
-                   recorded_times, recorded_qpos, recorded_qvel):  # <--- added parameters
+                   recorded_times, recorded_qpos, recorded_qvel, recorded_gripper):  # <-- added parameter
     """Squeezes the gripper until the force threshold is reached, then lifts the object up."""
     i = 0
     while viewer.is_running():
@@ -126,6 +127,7 @@ def squeeze_object(viewer, model, data, configuration, rate, d_gripper_box_thres
         recorded_times.append(data.time)
         recorded_qpos.append(data.qpos.copy())
         recorded_qvel.append(data.qvel.copy())
+        recorded_gripper.append(data.site_xpos[model.site("attachment_site").id].copy())  # <-- record gripper pos
 
         viewer.sync()
         rate.sleep()

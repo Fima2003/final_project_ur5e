@@ -74,6 +74,7 @@ if __name__ == "__main__":
     recorded_times = []
     recorded_qpos = []
     recorded_qvel = []
+    recorded_gripper = []   # <-- new list for gripper positions
 
     with mujoco.viewer.launch_passive(
         model=model,
@@ -131,12 +132,12 @@ if __name__ == "__main__":
             tasks, limits, solver,
             rate, end_effector_task, target_pose,
             pos_threshold, ori_threshold, max_iters,
-            recorded_times, recorded_qpos, recorded_qvel   # pass recording lists
+            recorded_times, recorded_qpos, recorded_qvel, recorded_gripper   # <-- pass recorded_gripper
         ):
             gripper_distance_threshold = 1e-3
             squeeze_object(viewer, model, data, configuration,
                            rate, gripper_distance_threshold,
-                           recorded_times, recorded_qpos, recorded_qvel)  # pass recording lists
+                           recorded_times, recorded_qpos, recorded_qvel, recorded_gripper)   # <-- pass recorded_gripper
         configuration.update(data.qpos)
         mujoco.mj_forward(model, data)
         move_arm_to_position(
@@ -144,7 +145,7 @@ if __name__ == "__main__":
             tasks, limits, solver,
             rate, end_effector_task, new_target_pose,
             pos_threshold, ori_threshold, max_iters,
-            recorded_times, recorded_qpos, recorded_qvel   # pass recording lists
+            recorded_times, recorded_qpos, recorded_qvel, recorded_gripper   # <-- pass recorded_gripper
         )
         
         print("Finished moving.")
@@ -154,10 +155,10 @@ if __name__ == "__main__":
             rate.sleep()
 
         # Convert recording lists to numpy arrays for plotting if desired
-        import numpy as np
         recorded_times = np.array(recorded_times)
         recorded_qpos = np.array(recorded_qpos)
         recorded_qvel = np.array(recorded_qvel)
+        recorded_gripper = np.array(recorded_gripper)
 
         # Fetch joint names from the max_velocities dictionary if available
         n_joints = 6
@@ -186,4 +187,63 @@ if __name__ == "__main__":
         plt.title("Joint Velocities Over Time")
         plt.legend()
         plt.savefig("graphs/joint_velocities.png")
+        plt.close()
+
+        # Compute joint accelerations from velocities
+        accelerations = np.diff(recorded_qvel, axis=0) / np.diff(recorded_times)[:, None]
+        time_acc = recorded_times[1:]  # time stamps for accelerations
+
+        # Plot joint accelerations over time
+        plt.figure()
+        for j in range(n_joints):
+            plt.plot(time_acc, accelerations[:, j], label=joint_names[j])
+        plt.xlabel("Time (s)")
+        plt.ylabel("Joint Acceleration")
+        plt.title("Joint Accelerations Over Time")
+        plt.legend()
+        plt.savefig("graphs/joint_accelerations.png")
+        plt.close()
+
+        # --- New plotting for gripper Cartesian positions --- 
+
+        # Plot gripper positions over time (x, y, z)
+        plt.figure()
+        plt.plot(recorded_times, recorded_gripper[:, 0], label="X")
+        plt.plot(recorded_times, recorded_gripper[:, 1], label="Y")
+        plt.plot(recorded_times, recorded_gripper[:, 2], label="Z")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Gripper Position (m)")
+        plt.title("Gripper Cartesian Position Over Time")
+        plt.legend()
+        plt.savefig("graphs/gripper_position.png")
+        plt.close()
+
+        # Compute first derivative: gripper velocity
+        gripper_velocity = np.diff(recorded_gripper, axis=0) / np.diff(recorded_times)[:, None]
+        time_gripper_vel = recorded_times[1:]
+
+        plt.figure()
+        plt.plot(time_gripper_vel, gripper_velocity[:, 0], label="X velocity")
+        plt.plot(time_gripper_vel, gripper_velocity[:, 1], label="Y velocity")
+        plt.plot(time_gripper_vel, gripper_velocity[:, 2], label="Z velocity")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Gripper Velocity (m/s)")
+        plt.title("Gripper Velocity Over Time")
+        plt.legend()
+        plt.savefig("graphs/gripper_velocity.png")
+        plt.close()
+
+        # Compute second derivative: gripper acceleration
+        gripper_acceleration = np.diff(gripper_velocity, axis=0) / np.diff(time_gripper_vel)[:, None]
+        time_gripper_acc = time_gripper_vel[1:]
+
+        plt.figure()
+        plt.plot(time_gripper_acc, gripper_acceleration[:, 0], label="X acceleration")
+        plt.plot(time_gripper_acc, gripper_acceleration[:, 1], label="Y acceleration")
+        plt.plot(time_gripper_acc, gripper_acceleration[:, 2], label="Z acceleration")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Gripper Acceleration (m/s²)")
+        plt.title("Gripper Acceleration Over Time")
+        plt.legend()
+        plt.savefig("graphs/gripper_acceleration.png")
         plt.close()
