@@ -1,14 +1,16 @@
 <mujoco model="ur5e scene">
-  <include file="ur5e.xml" />
+  <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets" />
+  <!-- <include file="ur5e.xml" /> -->
 
   <statistic center="0.3 0 0.3" extent="0.8" meansize="0.08" />
   <default>
     <default class="soft">
-      <geom type="mesh" contype="1" conaffinity="1" friction="1.5 1.5 1.5" solimp="0.19 0.19 0.001"
-        solref="0.05 0.5" />
+      <geom type="mesh" contype="1" conaffinity="1" friction="1.5 1.5 1.5"
+        solimp="0.19 0.19 0.001 3 0.5"
+        solref="0.01 0.5" />
     </default>
   </default>
-  <size memory="50M"/>
+  <size memory="50M" />
 
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0" />
@@ -21,7 +23,8 @@
       mark="cross" markrgb=".8 .8 .8" />
     <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" />
     <material name="soft_material" rgba="0.9 0.3 0.3 1" />
-    <mesh name="soft_cube" file="soft_cube.stl" scale="0.02 0.05 0.06" />
+    <!-- <mesh name="soft_cube" file="soft_cube.stl" scale="0.02 0.05 0.06" /> -->
+    <!-- <mesh name="salmon_mesh" file="meshes/salmon_vol.msh" scale="0.02 0.05 0.06" /> -->
   </asset>
 
   <worldbody>
@@ -40,17 +43,21 @@
       <site name="soft_cube" />
       <freejoint />
       <inertial mass="0.9" pos="0 0 0" diaginertia="0.09 0.01 0.09" />
-      <geom name="soft_cube" class="soft" mesh="soft_cube" material="soft_material" />
+      <flexcomp name="shark" type="gmsh" dim="1" rgba=".8 .2 .2 1" radius="0.001" pos="0 0 .3"
+        mass="2" scale="0.1 0.1 0.1" file="meshes/salmon_vol.msh">
+        <edge equality="true" />
+      </flexcomp>
+      <!-- <geom name="soft_cube" class="soft" mesh="salmon_mesh" material="soft_material" /> -->
     </body>
   </worldbody>
 
-  <sensor>
+  <!-- <sensor>
     <fromto geom1="right_silicone_pad" geom2="soft_cube" cutoff="1" />
-  </sensor>
+  </sensor> -->
 
-  <keyframe>
+  <!-- <keyframe>
     <key name="home"
       qpos="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0 0 0 0 0 0 0 0 0 0.3 0.1 0.33 0 0 0 0"
       ctrl="0 0 0 0 0 0 0" />
-  </keyframe>
+  </keyframe> -->
 </mujoco>
