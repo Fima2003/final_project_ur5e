@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 
 
 _HERE = Path(__file__).parent
-_XML = _HERE / "scene.xml"
+_XML = _HERE / "mink_scene.xml"
 
 if __name__ == "__main__":
     model = mujoco.MjModel.from_xml_path(_XML.as_posix())
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     wrist_3_geoms = mink.get_body_geom_ids(
         model, model.body("wrist_3_link").id)
     collision_pairs = [
-        (wrist_3_geoms, ["floor", "wall1", "wall2", "wall3"]),
+        (wrist_3_geoms, ["floor"]),
     ]
 
     limits = [
@@ -89,7 +89,7 @@ if __name__ == "__main__":
         viewer.cam.distance = 2.0  # Set distance from the scene
         # Set the point the camera looks at
         viewer.cam.lookat[:] = [0.0, 0.0, 0.5]
-        mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+        # mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
         configuration.update(data.qpos)
         mujoco.mj_forward(model, data)
 
@@ -97,11 +97,11 @@ if __name__ == "__main__":
 
         # Define the poses for the arm
         orientation = SO3.from_rpy_radians(0, np.pi, np.pi/2)
-        soft_cube_body_id = model.body("soft_cube").id
-        soft_cube_position = data.xpos[soft_cube_body_id]
+        # soft_cube_body_id = model.body("shark").id
+        soft_cube_position = [-0.1, 0.3, 0.8] # data.xpos[soft_cube_body_id]
         # Get the dimensions of the soft_cube
-        soft_cube_geom_id = model.body("soft_cube").id
-        soft_cube_dimensions = model.geom_size[soft_cube_geom_id]
+        # soft_cube_geom_id = model.body("shark").id
+        soft_cube_dimensions = [0.3, 0.3, 0.3] # model.geom_size[soft_cube_geom_id]
         print(f"Soft Cube dimensions: {soft_cube_dimensions}")
         print(f"Soft Cube position: {soft_cube_position}")
 
@@ -167,83 +167,83 @@ if __name__ == "__main__":
         else:
             joint_names = [f'Joint {j}' for j in range(n_joints)]
 
-        # Plot joint positions over time
-        plt.figure()
-        for j in range(n_joints):
-            plt.plot(recorded_times, recorded_qpos[:, j], label=joint_names[j])
-        plt.xlabel("Time (s)")
-        plt.ylabel("Joint Position")
-        plt.title("Joint Positions Over Time")
-        plt.legend()
-        plt.savefig("graphs/joint_positions.png")
-        plt.close()
+    #     # Plot joint positions over time
+    #     plt.figure()
+    #     for j in range(n_joints):
+    #         plt.plot(recorded_times, recorded_qpos[:, j], label=joint_names[j])
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("Joint Position")
+    #     plt.title("Joint Positions Over Time")
+    #     plt.legend()
+    #     plt.savefig("graphs/joint_positions.png")
+    #     plt.close()
 
-        # Plot joint velocities over time
-        plt.figure()
-        for j in range(n_joints):
-            plt.plot(recorded_times, recorded_qvel[:, j], label=joint_names[j])
-        plt.xlabel("Time (s)")
-        plt.ylabel("Joint Velocity")
-        plt.title("Joint Velocities Over Time")
-        plt.legend()
-        plt.savefig("graphs/joint_velocities.png")
-        plt.close()
+    #     # Plot joint velocities over time
+    #     plt.figure()
+    #     for j in range(n_joints):
+    #         plt.plot(recorded_times, recorded_qvel[:, j], label=joint_names[j])
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("Joint Velocity")
+    #     plt.title("Joint Velocities Over Time")
+    #     plt.legend()
+    #     plt.savefig("graphs/joint_velocities.png")
+    #     plt.close()
 
-        # Compute joint accelerations from velocities
-        accelerations = np.diff(recorded_qvel, axis=0) / np.diff(recorded_times)[:, None]
-        time_acc = recorded_times[1:]  # time stamps for accelerations
+    #     # Compute joint accelerations from velocities
+    #     accelerations = np.diff(recorded_qvel, axis=0) / np.diff(recorded_times)[:, None]
+    #     time_acc = recorded_times[1:]  # time stamps for accelerations
 
-        # Plot joint accelerations over time
-        plt.figure()
-        for j in range(n_joints):
-            plt.plot(time_acc, accelerations[:, j], label=joint_names[j])
-        plt.xlabel("Time (s)")
-        plt.ylabel("Joint Acceleration")
-        plt.title("Joint Accelerations Over Time")
-        plt.legend()
-        plt.savefig("graphs/joint_accelerations.png")
-        plt.close()
+    #     # Plot joint accelerations over time
+    #     plt.figure()
+    #     for j in range(n_joints):
+    #         plt.plot(time_acc, accelerations[:, j], label=joint_names[j])
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("Joint Acceleration")
+    #     plt.title("Joint Accelerations Over Time")
+    #     plt.legend()
+    #     plt.savefig("graphs/joint_accelerations.png")
+    #     plt.close()
 
-        # --- New plotting for gripper Cartesian positions --- 
+    #     # --- New plotting for gripper Cartesian positions --- 
 
-        # Plot gripper positions over time (x, y, z)
-        plt.figure()
-        plt.plot(recorded_times, recorded_gripper[:, 0], label="X")
-        plt.plot(recorded_times, recorded_gripper[:, 1], label="Y")
-        plt.plot(recorded_times, recorded_gripper[:, 2], label="Z")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Gripper Position (m)")
-        plt.title("Gripper Cartesian Position Over Time")
-        plt.legend()
-        plt.savefig("graphs/gripper_position.png")
-        plt.close()
+    #     # Plot gripper positions over time (x, y, z)
+    #     plt.figure()
+    #     plt.plot(recorded_times, recorded_gripper[:, 0], label="X")
+    #     plt.plot(recorded_times, recorded_gripper[:, 1], label="Y")
+    #     plt.plot(recorded_times, recorded_gripper[:, 2], label="Z")
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("Gripper Position (m)")
+    #     plt.title("Gripper Cartesian Position Over Time")
+    #     plt.legend()
+    #     plt.savefig("graphs/gripper_position.png")
+    #     plt.close()
 
-        # Compute first derivative: gripper velocity
-        gripper_velocity = np.diff(recorded_gripper, axis=0) / np.diff(recorded_times)[:, None]
-        time_gripper_vel = recorded_times[1:]
+    #     # Compute first derivative: gripper velocity
+    #     gripper_velocity = np.diff(recorded_gripper, axis=0) / np.diff(recorded_times)[:, None]
+    #     time_gripper_vel = recorded_times[1:]
 
-        plt.figure()
-        plt.plot(time_gripper_vel, gripper_velocity[:, 0], label="X velocity")
-        plt.plot(time_gripper_vel, gripper_velocity[:, 1], label="Y velocity")
-        plt.plot(time_gripper_vel, gripper_velocity[:, 2], label="Z velocity")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Gripper Velocity (m/s)")
-        plt.title("Gripper Velocity Over Time")
-        plt.legend()
-        plt.savefig("graphs/gripper_velocity.png")
-        plt.close()
+    #     plt.figure()
+    #     plt.plot(time_gripper_vel, gripper_velocity[:, 0], label="X velocity")
+    #     plt.plot(time_gripper_vel, gripper_velocity[:, 1], label="Y velocity")
+    #     plt.plot(time_gripper_vel, gripper_velocity[:, 2], label="Z velocity")
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("Gripper Velocity (m/s)")
+    #     plt.title("Gripper Velocity Over Time")
+    #     plt.legend()
+    #     plt.savefig("graphs/gripper_velocity.png")
+    #     plt.close()
 
-        # Compute second derivative: gripper acceleration
-        gripper_acceleration = np.diff(gripper_velocity, axis=0) / np.diff(time_gripper_vel)[:, None]
-        time_gripper_acc = time_gripper_vel[1:]
+    #     # Compute second derivative: gripper acceleration
+    #     gripper_acceleration = np.diff(gripper_velocity, axis=0) / np.diff(time_gripper_vel)[:, None]
+    #     time_gripper_acc = time_gripper_vel[1:]
 
-        plt.figure()
-        plt.plot(time_gripper_acc, gripper_acceleration[:, 0], label="X acceleration")
-        plt.plot(time_gripper_acc, gripper_acceleration[:, 1], label="Y acceleration")
-        plt.plot(time_gripper_acc, gripper_acceleration[:, 2], label="Z acceleration")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Gripper Acceleration (m/s²)")
-        plt.title("Gripper Acceleration Over Time")
-        plt.legend()
-        plt.savefig("graphs/gripper_acceleration.png")
-        plt.close()
+    #     plt.figure()
+    #     plt.plot(time_gripper_acc, gripper_acceleration[:, 0], label="X acceleration")
+    #     plt.plot(time_gripper_acc, gripper_acceleration[:, 1], label="Y acceleration")
+    #     plt.plot(time_gripper_acc, gripper_acceleration[:, 2], label="Z acceleration")
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("Gripper Acceleration (m/s²)")
+    #     plt.title("Gripper Acceleration Over Time")
+    #     plt.legend()
+    #     plt.savefig("graphs/gripper_acceleration.png")
+    #     plt.close()

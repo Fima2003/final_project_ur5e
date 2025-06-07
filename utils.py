@@ -106,9 +106,9 @@ def squeeze_object(viewer, model, data, configuration, rate, d_gripper_box_thres
     i = 0
     while viewer.is_running():
 
-        pos_gripper = data.sensordata[:3]
-        pos_box = data.sensordata[3:]
-        d_gripper_box = np.linalg.norm(pos_gripper - pos_box)
+        # Use framepos sensor output (a single 3-vector) for gripper-to-box distance
+        diff = data.sensordata[:3]
+        d_gripper_box = np.linalg.norm(diff)
         if d_gripper_box <= d_gripper_box_threshold:
             i += 1
         else:
@@ -120,14 +120,15 @@ def squeeze_object(viewer, model, data, configuration, rate, d_gripper_box_thres
         # Command gripper closing while squeezing
         arm_ctrl = configuration.q[:6]
         gripper_command = 255.0
-        data.ctrl = np.concatenate((arm_ctrl, np.array([gripper_command])))
+        
+        data.ctrl = np.concatenate((arm_ctrl, np.array([gripper_command, ])))
         mujoco.mj_step(model, data)
 
         # Record data at this time step
         recorded_times.append(data.time)
         recorded_qpos.append(data.qpos.copy())
         recorded_qvel.append(data.qvel.copy())
-        recorded_gripper.append(data.site_xpos[model.site("attachment_site").id].copy())  # <-- record gripper pos
+        recorded_gripper.append(data.sensordata.copy())
 
         viewer.sync()
         rate.sleep()

@@ -27,3 +27,5 @@ wheelhouse/
 # vscode
 .vscode/
 gmsh_cleaner/
+
+collision.py
