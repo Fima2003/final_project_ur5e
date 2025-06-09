@@ -33,7 +33,10 @@ class UR5e:
         wrist_3_geoms = mink.get_body_geom_ids(
             self.model, self.model.body("wrist_3_link").id)
         collision_pairs = [
-            (wrist_3_geoms, ["floor", "table", "wall1", "wall2", "wall3"]),
+            (wrist_3_geoms, [
+                "floor", 
+                # "table", "wall1", "wall2", "wall3"
+            ]),
         ]
         self.limits = [
             mink.ConfigurationLimit(
@@ -46,14 +49,22 @@ class UR5e:
             mink.VelocityLimit(self.model, self.max_velocities)
         ]
 
-    def set_destination(self, position, orientation: mink.SO3 = mink.SO3.from_rpy_radians(0, np.pi, np.pi/2)):
+    def set_destination(self, position, rotation: mink.SO3 = mink.SO3.from_rpy_radians(0, np.pi, np.pi/2)):
         target = mink.SE3.from_rotation_and_translation(
-            orientation,
+            rotation,
             position
         )
         self.end_effector_task.set_target(target)
 
-    def go(self, run_for=150, frequency=200.0, solver="daqp", max_iters=20, pos_threshold=1e-4, ori_threshold=1e-4):
+    def go(
+        self,
+        run_for=150,
+        frequency=200.0,
+        solver="daqp",
+        max_iters=20,
+        pos_threshold=1e-4,
+        ori_threshold=1e-4
+    ):
         final_control = []
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data)
@@ -62,7 +73,7 @@ class UR5e:
         rate = RateLimiter(frequency, warn=False)
 
         for i in range(run_for):
-            for i in range(max_iters):
+            for j in range(max_iters):
                 vel = mink.solve_ik(self.config, self.tasks,
                                     rate.dt, solver, limits=self.limits)
                 self.config.integrate_inplace(vel, rate.dt)
@@ -74,7 +85,21 @@ class UR5e:
 
             final_control.append(self.config.q[:self.model.nu])
             self.data.ctrl = self.config.q[:self.model.nu]
+            mujoco.mj_forward(self.model, self.data)
+
+        return final_control
+
+    def stay(self, dur=150):
+        final_control = []
+        mujoco.mj_forward(self.model, self.data)
+        print(f"Current configuration: {self.config.q[:self.model.nu]}")
+
+        for _ in range(dur):
+            final_control.append(self.config.q[:self.model.nu])
+            self.data.ctrl = self.config.q[:self.model.nu]
             mujoco.mj_step(self.model, self.data)
+        
+        print(f"Final configuration: {self.config.q[:self.model.nu]}")
 
         return final_control
 
@@ -83,15 +108,15 @@ class UR5e:
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data)
         arm_control = self.config.q[:6]
-        hook_command = -0.37
-        gripper_command = 0 # 0.56
+        hook_command = 0.2
+        gripper_command = 0.29
 
         new_control = np.concatenate((arm_control, np.array(
             [gripper_command, hook_command])))
         final_control.append(new_control)
-        
+
         return final_control
 
-    def ungrip():
+    def ungrip(self):
         # Ungrip the object
-        raise "Not Implemented"
+        raise NotImplementedError("Ungrip action is not implemented")

@@ -41,7 +41,7 @@
       </default>
       <default class="follower">
         <joint range="-0.872664 0.872664" pos="0 -0.018 0.0065" solimplimit="0.95 0.99 0.001"
-          solreflimit="0.005 1" />
+          solreflimit="0.005 1" stiffness="10"/>
       </default>
       <default class="spring_link">
         <joint range="-0.29670597283 0.8" stiffness="0.05" springref="2.62" damping="0.00125" />
@@ -127,9 +127,9 @@
   </asset>
 
   <worldbody>
-    <light name="light1" pos="0 0 10" dir="0 0 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" />
-    <light name="light2" pos="1 1 2" dir="-1 -1 -2" diffuse="0.7 0.7 0.7" specular="0.2 0.2 0.2" />
-    <body name="ur5e/base" quat="1 0 0 1" childclass="ur5e" pos="0 -0.12075 0.3">
+    <!-- <light name="light1" pos="0 0 10" dir="0 0 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" />
+    <light name="light2" pos="1 1 2" dir="-1 -1 -2" diffuse="0.7 0.7 0.7" specular="0.2 0.2 0.2" /> -->
+    <body name="ur5e/base" quat="1 0 0 1" childclass="ur5e" pos="0 0 0">
       <inertial mass="4" pos="0 0 0" diaginertia="0.00443333156 0.00443333156 0.0072" />
       <geom mesh="base_0" material="black" class="visual" />
       <geom mesh="base_1" material="jointgray" class="visual" />
@@ -226,11 +226,12 @@
                               diaginertia="2.67415e-06 2.4559e-06 6.02031e-07" />
                             <joint name="right_follower_joint" class="follower" />
                             <body name="right_subassy" pos="0.09 0.02 0.24"
-                              quat="0 0.707 0 -0.707">
+                            quat="0 0.707 0 -0.707">
+                              <site name="right_assy" rgba="1 0 0 1" size="0.01" group="1" />
                               <inertial
                                 pos="0.0934020089723395 0.0157225552881997 0.0543562923281241"
-                                mass="0.926217426305273"
-                                diaginertia="7.62674421961674E-05 0.000277946035082107 0.000244957393107757" />
+                                mass="0.0355"
+                                diaginertia="4.73958e-07 3.64583e-07 1.23958e-07" />
                               <geom
                                 name="right_base_link_visual"
                                 class="custom_gripper/visual"
@@ -307,8 +308,8 @@
                             <body name="left_subassy" pos="-0.09 0.02 0.24"
                               quat="-0.5 0.5 -0.5 0.5">
                               <inertial pos="0.022759520987878 0.090205428527215 0.0347712619150226"
-                                mass="0.0955832510340183"
-                                diaginertia="0.000343814638771794 0.00010368622496836 0.00029353692291537" />
+                                mass="0.0355"
+                                diaginertia="4.73958e-07 3.64583e-07 1.23958e-07" />
                               <geom name="left_base_link_visual"
                                 mesh="left_base_link"
                                 class="custom_gripper/visual"
