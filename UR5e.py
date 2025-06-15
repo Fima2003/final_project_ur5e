@@ -3,10 +3,13 @@ import mujoco
 import mink
 import numpy as np
 
+from utils import get_mink_xml
+
 
 class UR5e:
-    def __init__(self, scene_xml: str = './mink_scene.xml'):
-        self.model = mujoco.MjModel.from_xml_path(scene_xml.as_posix())
+    def __init__(self):
+        scene_xml = get_mink_xml()
+        self.model = mujoco.MjModel.from_xml_string(scene_xml)
 
         self.data = mujoco.MjData(self.model)
         self.config = mink.Configuration(self.model)
@@ -31,11 +34,12 @@ class UR5e:
             "wrist_3_joint": np.pi,
         }
         wrist_3_geoms = mink.get_body_geom_ids(
-            self.model, self.model.body("wrist_3_link").id)
+            self.model, self.model.body("wrist_3_link").id
+        )
         collision_pairs = [
             (wrist_3_geoms, [
-                "floor", 
-                # "table", "wall1", "wall2", "wall3"
+                "floor",
+                "table", "wall1", "wall2", "wall3"
             ]),
         ]
         self.limits = [
@@ -44,10 +48,12 @@ class UR5e:
             mink.CollisionAvoidanceLimit(
                 model=self.config.model,
                 geom_pairs=collision_pairs,
-                minimum_distance_from_collisions=0.1
+                minimum_distance_from_collisions=0.5
             ),
             mink.VelocityLimit(self.model, self.max_velocities)
         ]
+
+        self.initial_position = self.data.qpos[:self.model.nu].copy()
 
     def set_destination(self, position, rotation: mink.SO3 = mink.SO3.from_rpy_radians(0, np.pi, np.pi/2)):
         target = mink.SE3.from_rotation_and_translation(
@@ -92,31 +98,40 @@ class UR5e:
     def stay(self, dur=150):
         final_control = []
         mujoco.mj_forward(self.model, self.data)
-        print(f"Current configuration: {self.config.q[:self.model.nu]}")
 
         for _ in range(dur):
             final_control.append(self.config.q[:self.model.nu])
             self.data.ctrl = self.config.q[:self.model.nu]
             mujoco.mj_step(self.model, self.data)
-        
-        print(f"Final configuration: {self.config.q[:self.model.nu]}")
 
         return final_control
 
-    def grip(self):
+    def grip(self, run_for=150):
         final_control = []
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data)
         arm_control = self.config.q[:6]
-        hook_command = 0.2
-        gripper_command = 0.29
+        hook_command = 0.26
+        gripper_command = 0.1
 
         new_control = np.concatenate((arm_control, np.array(
             [gripper_command, hook_command])))
-        final_control.append(new_control)
-
+        final_control = [new_control.copy() for _ in range(run_for)]
         return final_control
 
     def ungrip(self):
         # Ungrip the object
         raise NotImplementedError("Ungrip action is not implemented")
+
+    def reset(self):
+        """
+        Reset the robot's arm joints to the initial position, keeping the gripper and hook state unchanged.
+        Returns:
+            list: A list containing a single array of the full control state (for UR5e replica replay).
+        """
+        nu = self.model.nu
+        self.data.qpos[:nu-1] = self.initial_position[:nu-1]
+        self.config.update(self.data.qpos)
+        mujoco.mj_forward(self.model, self.data)
+        # Return as array of arrays for replica replay
+        return [self.config.q[:nu].copy() for i in range(400)]

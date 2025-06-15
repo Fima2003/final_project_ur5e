@@ -1,134 +1,35 @@
-import mujoco
-import numpy as np
-import mink
+def get_mink_xml(scene_path="./scene.xml"):
+    begin = """
+    <mujoco model="ur5e scene">
+  <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets" />
+  <include file="ur5e.xml" />
 
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512"
+      height="512"
+      mark="cross" markrgb=".8 .8 .8" />
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" />
+  </asset>
 
-def setup(path):
-    model = mujoco.MjModel.from_xml_path(path.as_posix())
-    data = mujoco.MjData(model)
+  <worldbody>
+    <geom name="floor" size="1 1 0.01" type="plane" material="grid" />
+"""
 
-    configuration = mink.Configuration(model)
+    end = """</worldbody>
+    </mujoco>"""
 
-    tasks = [
-        end_effector_task := mink.FrameTask(
-            frame_name="attachment_site",
-            frame_type="site",
-            position_cost=1.0,
-            orientation_cost=1.0,
-            lm_damping=1.0,
-        ),
-    ]
+    import xml.etree.ElementTree as ET
 
-    # Enable collision avoidance between (wrist3, floor) and (wrist3, wall).
-    wrist_3_geoms = mink.get_body_geom_ids(
-        model, model.body("wrist_3_link").id)
-    collision_pairs = [
-        (wrist_3_geoms, ["floor", "table", 'wall4', 'wall2', 'wall3']),
-    ]
+    def extract_environment_from_scene(file_path):
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        for element in root.findall(".//*[@name='environment']"):
+            return ET.tostring(element, encoding="unicode")
+        return ""
 
-    limits = [
-        mink.ConfigurationLimit(model=configuration.model),
-        mink.CollisionAvoidanceLimit(
-            model=configuration.model,
-            geom_pairs=collision_pairs,
-        ),
-    ]
+    middle = extract_environment_from_scene(scene_path)
 
-    max_velocities = {
-        "shoulder_pan_joint": np.pi,
-        "shoulder_lift_joint": np.pi,
-        "elbow_joint": np.pi,
-        "wrist_1_joint": np.pi,
-        "wrist_2_joint": np.pi,
-        "wrist_3_joint": np.pi,
-    }
-    velocity_limit = mink.VelocityLimit(model, max_velocities)
-    limits.append(velocity_limit)
-    return model, data, configuration, tasks, limits, end_effector_task
+    return begin + middle + end
 
-
-def move_arm_to_position(
-    viewer, model, data, configuration: mink.Configuration,
-    tasks, limits, solver,
-    rate, end_effector_task: mink.FrameTask, target_pose,
-    pos_threshold, ori_threshold, max_iters,
-    recorded_times, recorded_qpos, recorded_qvel, recorded_gripper   # <-- added parameter
-):
-    """Moves the arm to the specified target pose using IK."""
-    while viewer.is_running():
-        # Set the end-effector target to the desired pose
-        end_effector_task.set_target(target_pose)
-
-        # Perform IK iterations
-        for i in range(max_iters):
-            vel = mink.solve_ik(configuration, tasks, rate.dt,
-                                solver, damping=1e-3, limits=limits)
-            configuration.integrate_inplace(vel, rate.dt)
-            err = end_effector_task.compute_error(configuration)
-            pos_achieved = np.linalg.norm(err[:3]) <= pos_threshold
-            ori_achieved = np.linalg.norm(err[3:]) <= ori_threshold
-            if pos_achieved and ori_achieved:
-                break
-
-        # Apply control command for the arm (gripper remains unchanged here)
-        arm_ctrl = configuration.q[:6]
-        data.ctrl[:6] = arm_ctrl
-
-        mujoco.mj_step(model, data)
-
-        # Synchronize configuration with the latest simulation state
-        configuration.update(data.qpos)
-        mujoco.mj_forward(model, data)
-
-        # Recompute error after update
-        err = end_effector_task.compute_error(configuration)
-        pos_achieved = np.linalg.norm(err[:3]) <= pos_threshold
-        ori_achieved = np.linalg.norm(err[3:]) <= ori_threshold
-
-        # Record data at this time step
-        recorded_times.append(data.time)
-        recorded_qpos.append(data.qpos.copy())
-        recorded_qvel.append(data.qvel.copy())
-        recorded_gripper.append(data.site_xpos[model.site("attachment_site").id].copy())  # <-- record gripper pos
-
-        viewer.sync()
-        rate.sleep()
-
-        if pos_achieved and ori_achieved:
-            print("Target pose achieved.")
-            return True
-    return False
-
-
-def squeeze_object(viewer, model, data, configuration, rate, d_gripper_box_threshold,
-                   recorded_times, recorded_qpos, recorded_qvel, recorded_gripper):  # <-- added parameter
-    """Squeezes the gripper until the force threshold is reached, then lifts the object up."""
-    i = 0
-    while viewer.is_running():
-
-        # Use framepos sensor output (a single 3-vector) for gripper-to-box distance
-        diff = data.sensordata[:3]
-        d_gripper_box = np.linalg.norm(diff)
-        if d_gripper_box <= d_gripper_box_threshold:
-            i += 1
-        else:
-            i = 0
-        if i > 200:
-            print("Distance threshold reached (", d_gripper_box_threshold, "), stopping to squeeze")
-            return True
-
-        # Command gripper closing while squeezing
-        arm_ctrl = configuration.q[:6]
-        gripper_command = 255.0
-        
-        data.ctrl = np.concatenate((arm_ctrl, np.array([gripper_command, ])))
-        mujoco.mj_step(model, data)
-
-        # Record data at this time step
-        recorded_times.append(data.time)
-        recorded_qpos.append(data.qpos.copy())
-        recorded_qvel.append(data.qvel.copy())
-        recorded_gripper.append(data.sensordata.copy())
-
-        viewer.sync()
-        rate.sleep()
+if __name__ == "__main__":
+    print(get_mink_xml())
