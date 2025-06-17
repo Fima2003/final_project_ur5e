@@ -1,12 +1,12 @@
 import mink
 import numpy as np
 
-from arms.Arm import Arm
+from Arm import Arm
 
 
 class FR3(Arm):
     def __init__(self):
-        super().__init__()
+        super().__init__(actuators=7)
 
     def initialize(self):
         self.end_effector_task: mink.FrameTask = mink.FrameTask(
@@ -28,7 +28,7 @@ class FR3(Arm):
         }
         
         wrist_3_geoms = mink.get_body_geom_ids(
-            self.model, self.model.body("fr_joint7").id
+            self.model, self.model.body("fr_link7").id
         )
         collision_pairs = [
             (wrist_3_geoms, [

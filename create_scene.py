@@ -16,6 +16,8 @@ def create_scene(scene_name: str, environment_name: str, arm_name: str, gripper_
     try:
         copy_necessary_assets(scene_name, arm_name,
                               gripper_name, environment_name)
+        copy_executables(arm_name, scene_name)
+        create_runner(arm_name, scene_name)
 
         arm_root, gripper_root, env_root = parse_xml(
             arm_path, gripper_path, env_path)
@@ -144,9 +146,28 @@ def copy_necessary_assets(scene_name: str, arm_name: str, gripper_name: str, env
                 environment_assets_path, asset), dirs_exist_ok=True)
 
 
-def copy_class(arm_name: str, environment_name: str):
+def copy_executables(arm_name: str, environment_name: str):
     shutil.copy(f"arms/{arm_name}/{arm_name}.py",
                 f"scenes/{environment_name}/{arm_name}.py")
+    shutil.copy("arms/Arm.py",
+                f"scenes/{environment_name}/Arm.py")
+    shutil.copy('executables/main.py', f'scenes/{environment_name}/main.py')
+    shutil.copy('executables/utils.py', f'scenes/{environment_name}/utils.py')
+
+
+def create_runner(arm_name: str, env_name: str):
+    actual_arm_name = arm_name.upper() if arm_name != 'ur5e' else 'UR5e'
+    with open(f"scenes/{env_name}/runner.py", "w") as f:
+        f.write(
+            f"from {arm_name} import {actual_arm_name}\n")
+        f.write(f"from main import run_the_mf\n")
+        f.write(f"\n")
+        f.write(f"def main():\n")
+        f.write(f"    robot = {actual_arm_name}()\n")
+        f.write(f"    run_the_mf(robot)\n")
+        f.write(f"\n")
+        f.write(f"if __name__ == '__main__':\n")
+        f.write(f"    main()\n")
 
 
 def parse_xml(arm_path: str, gripper_path: str, env_path: str):
@@ -218,10 +239,18 @@ def deal_with_assets(arm_root: ET.Element, gripper_root: ET.Element, arm_name: s
 
 
 if __name__ == "__main__":
-    # Example usage
+    # Fetch the scene name, environment, arm, and gripper from command line arguments
+    import sys
+    if len(sys.argv) != 5:
+        print("Usage: python create_scene.py <scene_name> <environment_name> <arm_name> <gripper_name>")
+        sys.exit(1)
+    scene_name = sys.argv[1]
+    environment_name = sys.argv[2]
+    arm_name = sys.argv[3]
+    gripper_name = sys.argv[4]
     try:
-        create_scene("lab-kuka", "lab", "iiwa14", "2f85")
-        print("Scene lab created successfully.")
+        create_scene(scene_name, environment_name, arm_name, gripper_name)
+        print(f"Scene {scene_name} created successfully.")
     except FileNotFoundError as e:
         print(e)
     except Exception as e:

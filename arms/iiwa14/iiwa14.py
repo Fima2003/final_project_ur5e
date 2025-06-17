@@ -1,12 +1,12 @@
 import mink
 import numpy as np
 
-from arms.Arm import Arm
+from Arm import Arm
 
 
 class IIWA14(Arm):
     def __init__(self):
-        super().__init__()
+        super().__init__(actuators=7)
 
     def initialize(self):
         self.end_effector_task: mink.FrameTask = mink.FrameTask(
@@ -27,7 +27,7 @@ class IIWA14(Arm):
             "joint7": 3/4*np.pi,
         }
         wrist_3_geoms = mink.get_body_geom_ids(
-            self.model, self.model.body("joint7").id
+            self.model, self.model.body("link7").id
         )
         collision_pairs = [
             (wrist_3_geoms, [

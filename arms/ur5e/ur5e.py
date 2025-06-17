@@ -1,12 +1,12 @@
 import mink
 import numpy as np
 
-from arms.Arm import Arm
+from Arm import Arm
 
 
 class UR5e(Arm):
     def __init__(self):
-        super().__init__()
+        super().__init__(actuators=6)
         
 
     def initialize(self):

@@ -7,12 +7,13 @@ from utils import get_mink_xml
 
 
 class Arm:
-    def __init__(self):
-        scene_xml = get_mink_xml()
+    def __init__(self, scene_path="./scene.xml", actuators=6):
+        scene_xml = get_mink_xml(scene_path=scene_path)
         self.model = mujoco.MjModel.from_xml_string(scene_xml)
 
         self.data = mujoco.MjData(self.model)
         self.config = mink.Configuration(self.model)
+        self.actuators=actuators
         self.additional_actuators = 1  # 1 if no hook, 2 if hook is present
 
         self.initialize()
@@ -84,7 +85,7 @@ class Arm:
         final_control = []
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data)
-        arm_control = self.config.q[:6]
+        arm_control = self.config.q[:self.actuators]
         hook_command = 0.2
         gripper_command = 1
 
