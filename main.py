@@ -1,249 +1,180 @@
-from ik_settings import *
-from utils import move_arm_to_position, squeeze_object
-import matplotlib.pyplot as plt
-from pathlib import Path
-
+from loop_rate_limiters import RateLimiter
+from mink import SO3
 import mujoco
 import mujoco.viewer
+from arms.ur5e.UR5e import UR5e
+from pathlib import Path
 import numpy as np
-from loop_rate_limiters import RateLimiter
-
-import mink
-from mink.contrib import TeleopMocap
-from mink.lie.so3 import SO3
-import matplotlib
-matplotlib.use("Agg")
+from ur_analytic_ik import ur5e
 
 
 _HERE = Path(__file__).parent
-_XML = _HERE / "mink_scene.xml"
+_XML = _HERE / "scene.xml"
+FREQUENCY = 200.0
 
-if __name__ == "__main__":
-    model = mujoco.MjModel.from_xml_path(_XML.as_posix())
-    data = mujoco.MjData(model)
+# Load actual scene
+model = mujoco.MjModel.from_xml_path(_XML.as_posix())
+data = mujoco.MjData(model)
+mujoco.mj_step(model, data)
 
-    ## =================== ##
-    # Setup IK.
-    ## =================== ##
+# Initialize the UR5e robot with the Mink scene(simplified version without the shark)
+robot = UR5e()
 
-    configuration = mink.Configuration(model)
 
-    tasks = [
-        end_effector_task := mink.FrameTask(
-            frame_name="attachment_site",
-            frame_type="site",
-            position_cost=1.0,
-            orientation_cost=1.0,
-            lm_damping=1.0,
-        ),
-    ]
+# Fetch shark id and initial position
+shark_body_id = model.body("shark_body").id
+shark_body_position = data.xpos[shark_body_id]
 
-    # Enable collision avoidance between (wrist3, floor) and (wrist3, wall).
-    wrist_3_geoms = mink.get_body_geom_ids(
-        model, model.body("wrist_3_link").id)
-    collision_pairs = [
-        (wrist_3_geoms, ["floor"]),
-    ]
+# Fetch open box id and initial position
+box_body_id = model.body("open_box_body").id
+open_box_position = data.xpos[box_body_id]
 
-    limits = [
-        mink.ConfigurationLimit(model=configuration.model),
-        mink.CollisionAvoidanceLimit(
-            model=configuration.model,
-            geom_pairs=collision_pairs,
-        ),
-    ]
+print(f"Shark's initial position={shark_body_position}")
+print(f"Open box position={open_box_position}")
 
-    max_velocities = {
-        "shoulder_pan_joint": np.pi,
-        "shoulder_lift_joint": np.pi,
-        "elbow_joint": np.pi,
-        "wrist_1_joint": np.pi,
-        "wrist_2_joint": np.pi,
-        "wrist_3_joint": np.pi,
-    }
-    velocity_limit = mink.VelocityLimit(model, max_velocities)
-    limits.append(velocity_limit)
 
-    # Initialize key_callback function.
-    key_callback = TeleopMocap(data)
+def implement_control(control):
+    """Function to implement control commands."""
+    for i in range(len(control)):
+        data.ctrl = control[i]
+        mujoco.mj_step(model, data)
+        viewer.sync()
+        rate.sleep()
 
-    gripped = False  # Initialize gripped state
-    gripper_command = 0.0
 
-    # Initialize recording lists
-    recorded_times = []
-    recorded_qpos = []
-    recorded_qvel = []
-    recorded_gripper = []   # <-- new list for gripper positions
+with mujoco.viewer.launch_passive(
+    model=model,
+    data=data,
+    show_left_ui=False,
+    show_right_ui=True,
+) as viewer:
 
-    with mujoco.viewer.launch_passive(
-        model=model,
-        data=data,
-        show_left_ui=False,
-        show_right_ui=False,
-        key_callback=key_callback,
-    ) as viewer:
-        # Set up the camera
-        viewer.cam.azimuth = -90  # Set azimuth angle
-        viewer.cam.elevation = -15  # Set elevation angle
-        viewer.cam.distance = 2.0  # Set distance from the scene
-        # Set the point the camera looks at
-        viewer.cam.lookat[:] = [0.0, 0.0, 0.5]
-        # mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
-        configuration.update(data.qpos)
-        mujoco.mj_forward(model, data)
+    ###########################
+    ### SOME INITIALIZATION ###
+    ###########################
+    # SETUP THE CAMERA VIEW
+    viewer.cam.azimuth = -90
+    viewer.cam.elevation = -15
+    viewer.cam.distance = 2.0
+    viewer.cam.lookat[:] = [0.0, 0.0, 0.5]
 
-        rate = RateLimiter(frequency=100.0, warn=False)
+    # RATE LIMITER
+    rate = RateLimiter(frequency=FREQUENCY, warn=False)
 
-        # Define the poses for the arm
-        orientation = SO3.from_rpy_radians(0, np.pi, np.pi/2)
-        # soft_cube_body_id = model.body("shark").id
-        soft_cube_position = [-0.1, 0.3, 0.8] # data.xpos[soft_cube_body_id]
-        # Get the dimensions of the soft_cube
-        # soft_cube_geom_id = model.body("shark").id
-        soft_cube_dimensions = [0.3, 0.3, 0.3] # model.geom_size[soft_cube_geom_id]
-        print(f"Soft Cube dimensions: {soft_cube_dimensions}")
-        print(f"Soft Cube position: {soft_cube_position}")
+    ###########################
+    ###      SIMULATION     ###
+    ###########################
+    # SKIP FIRST 100 STEPS FOR FISH TO FALL
+    for i in range(100):
+        mujoco.mj_step(model, data)
+        viewer.sync()
+        rate.sleep()
 
-        grab_position = np.array(
-            [soft_cube_position[0], soft_cube_position[1], soft_cube_position[2] - soft_cube_dimensions[2] + 0.2])
-        print(f"Grab position: {grab_position}")
+    # OBTAIN FISH POSITION AND ROTATION
+    final_shark_body_position = data.xpos[shark_body_id].copy()
 
-        target_position = grab_position + np.array([0.0, 0.0, 0.2])
-        print(f"Target position: {grab_position}")
-
-        # Use the position of "soft_cube" as the target position
-        target_pose = mink.SE3.from_rotation_and_translation(
-            orientation,
-            grab_position
+    # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+    robot.set_destination(
+        np.array(final_shark_body_position + [0.0, 0.35, 0.26]),
+        SO3.from_matrix(
+            np.array(
+                [
+                    [0, 1, 0],
+                    [0, 0, -1],
+                    [-1, 0, 0]
+                ]
+            )
         )
-        new_target_pose = mink.SE3.from_rotation_and_translation(
-            orientation,
-            target_position
+    )
+    move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+    implement_control(move_control)
+
+    # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+    robot.set_destination(
+        np.array(final_shark_body_position + [0.0, 0.35, 0.245]),
+        SO3.from_matrix(
+            np.array(
+                [
+                    [0, 1, 0],
+                    [0, 0, -1],
+                    [-1, 0, 0]
+                ]
+            )
         )
-        final_target_pose = mink.SE3.from_rotation_and_translation(
-            orientation,
-            target_position + np.array([-0.1, 0.4, 0.0])
+    )
+    move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+    implement_control(move_control)
+
+    # GRIPPER IN ACTION
+    grip_control = robot.grip(run_for=600, stay_for=300)
+    implement_control(grip_control)
+    print("Gripper closed, fish is caught.")
+
+    # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+    robot.set_destination(
+        np.array(final_shark_body_position + [0.0, 0.35, 0.27]),
+        SO3.from_matrix(
+            np.array(
+                [
+                    [0, 1, 0],
+                    [0, 0, -1],
+                    [-1, 0, 0]
+                ]
+            )
         )
+    )
+    move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+    implement_control(move_control)
 
-        # Move the arm to the target pose
-        if move_arm_to_position(
-            viewer, model, data, configuration,
-            tasks, limits, solver,
-            rate, end_effector_task, target_pose,
-            pos_threshold, ori_threshold, max_iters,
-            recorded_times, recorded_qpos, recorded_qvel, recorded_gripper   # <-- pass recorded_gripper
-        ):
-            gripper_distance_threshold = 1e-3
-            squeeze_object(viewer, model, data, configuration,
-                           rate, gripper_distance_threshold,
-                           recorded_times, recorded_qpos, recorded_qvel, recorded_gripper)   # <-- pass recorded_gripper
-        configuration.update(data.qpos)
-        mujoco.mj_forward(model, data)
-        move_arm_to_position(
-            viewer, model, data, configuration,
-            tasks, limits, solver,
-            rate, end_effector_task, new_target_pose,
-            pos_threshold, ori_threshold, max_iters,
-            recorded_times, recorded_qpos, recorded_qvel, recorded_gripper   # <-- pass recorded_gripper
+    # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+    robot.set_destination(
+        np.array(final_shark_body_position + [0.0, 0.35, 0.31]),
+        SO3.from_matrix(
+            np.array(
+                [
+                    [0, 1, 0],
+                    [0, 0, -1],
+                    [-1, 0, 0]
+                ]
+            )
         )
-        
-        print("Finished moving.")
+    )
+    move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+    implement_control(move_control)
 
-        while viewer.is_running():
-            viewer.sync()
-            rate.sleep()
+    # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+    robot.set_destination(
+        np.array(final_shark_body_position + [0.0, 0.35, 0.35]),
+        SO3.from_matrix(
+            np.array(
+                [
+                    [0, 1, 0],
+                    [0, 0, -1],
+                    [-1, 0, 0]
+                ]
+            )
+        )
+    )
+    move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+    implement_control(move_control)
 
-        # Convert recording lists to numpy arrays for plotting if desired
-        recorded_times = np.array(recorded_times)
-        recorded_qpos = np.array(recorded_qpos)
-        recorded_qvel = np.array(recorded_qvel)
-        recorded_gripper = np.array(recorded_gripper)
+    # # RESET ROBOT TO INITIAL POSITION
+    # reset_control = robot.reset()
+    # implement_control(reset_control)
 
-        # Fetch joint names from the max_velocities dictionary if available
-        n_joints = 6
-        if n_joints == len(max_velocities):
-            joint_names = list(max_velocities.keys())
-        else:
-            joint_names = [f'Joint {j}' for j in range(n_joints)]
+    # # MOVE ROBOT WITH SHARK TO THE OPEN BOX
+    # robot.set_destination(
+    #     np.array(open_box_position + [0.0, -0.3, 0.3]),
+    #     SO3.from_matrix(
+    #         np.array(
+    #             [
+    #                 [0, -1, 0],
+    #                 [0, 0, 1],
+    #                 [-1, 0, 0]
+    #             ]
+    #         )
+    #     )
+    # )
 
-    #     # Plot joint positions over time
-    #     plt.figure()
-    #     for j in range(n_joints):
-    #         plt.plot(recorded_times, recorded_qpos[:, j], label=joint_names[j])
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("Joint Position")
-    #     plt.title("Joint Positions Over Time")
-    #     plt.legend()
-    #     plt.savefig("graphs/joint_positions.png")
-    #     plt.close()
-
-    #     # Plot joint velocities over time
-    #     plt.figure()
-    #     for j in range(n_joints):
-    #         plt.plot(recorded_times, recorded_qvel[:, j], label=joint_names[j])
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("Joint Velocity")
-    #     plt.title("Joint Velocities Over Time")
-    #     plt.legend()
-    #     plt.savefig("graphs/joint_velocities.png")
-    #     plt.close()
-
-    #     # Compute joint accelerations from velocities
-    #     accelerations = np.diff(recorded_qvel, axis=0) / np.diff(recorded_times)[:, None]
-    #     time_acc = recorded_times[1:]  # time stamps for accelerations
-
-    #     # Plot joint accelerations over time
-    #     plt.figure()
-    #     for j in range(n_joints):
-    #         plt.plot(time_acc, accelerations[:, j], label=joint_names[j])
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("Joint Acceleration")
-    #     plt.title("Joint Accelerations Over Time")
-    #     plt.legend()
-    #     plt.savefig("graphs/joint_accelerations.png")
-    #     plt.close()
-
-    #     # --- New plotting for gripper Cartesian positions --- 
-
-    #     # Plot gripper positions over time (x, y, z)
-    #     plt.figure()
-    #     plt.plot(recorded_times, recorded_gripper[:, 0], label="X")
-    #     plt.plot(recorded_times, recorded_gripper[:, 1], label="Y")
-    #     plt.plot(recorded_times, recorded_gripper[:, 2], label="Z")
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("Gripper Position (m)")
-    #     plt.title("Gripper Cartesian Position Over Time")
-    #     plt.legend()
-    #     plt.savefig("graphs/gripper_position.png")
-    #     plt.close()
-
-    #     # Compute first derivative: gripper velocity
-    #     gripper_velocity = np.diff(recorded_gripper, axis=0) / np.diff(recorded_times)[:, None]
-    #     time_gripper_vel = recorded_times[1:]
-
-    #     plt.figure()
-    #     plt.plot(time_gripper_vel, gripper_velocity[:, 0], label="X velocity")
-    #     plt.plot(time_gripper_vel, gripper_velocity[:, 1], label="Y velocity")
-    #     plt.plot(time_gripper_vel, gripper_velocity[:, 2], label="Z velocity")
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("Gripper Velocity (m/s)")
-    #     plt.title("Gripper Velocity Over Time")
-    #     plt.legend()
-    #     plt.savefig("graphs/gripper_velocity.png")
-    #     plt.close()
-
-    #     # Compute second derivative: gripper acceleration
-    #     gripper_acceleration = np.diff(gripper_velocity, axis=0) / np.diff(time_gripper_vel)[:, None]
-    #     time_gripper_acc = time_gripper_vel[1:]
-
-    #     plt.figure()
-    #     plt.plot(time_gripper_acc, gripper_acceleration[:, 0], label="X acceleration")
-    #     plt.plot(time_gripper_acc, gripper_acceleration[:, 1], label="Y acceleration")
-    #     plt.plot(time_gripper_acc, gripper_acceleration[:, 2], label="Z acceleration")
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("Gripper Acceleration (m/s²)")
-    #     plt.title("Gripper Acceleration Over Time")
-    #     plt.legend()
-    #     plt.savefig("graphs/gripper_acceleration.png")
-    #     plt.close()
+    # move_control = robot.go(frequency=FREQUENCY, stay_for=4000)
+    # implement_control(move_control)

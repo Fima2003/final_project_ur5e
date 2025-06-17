@@ -1,24 +1,22 @@
+import xml.etree.ElementTree as ET
+
+
 def get_mink_xml(scene_path="./scene.xml"):
     begin = """
     <mujoco model="ur5e scene">
-  <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets" />
-  <include file="ur5e.xml" />
+      <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets" />
+      <include file="ur5e.xml" />
 
-  <asset>
-    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512"
-      height="512"
-      mark="cross" markrgb=".8 .8 .8" />
-    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" />
-  </asset>
+      <asset>
+        <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512"
+          height="512"
+          mark="cross" markrgb=".8 .8 .8" />
+        <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" />
+      </asset>
 
-  <worldbody>
-    <geom name="floor" size="1 1 0.01" type="plane" material="grid" />
+      <worldbody>
+        <geom name="floor" size="1 1 0.01" type="plane" material="grid" />
 """
-
-    end = """</worldbody>
-    </mujoco>"""
-
-    import xml.etree.ElementTree as ET
 
     def extract_environment_from_scene(file_path):
         tree = ET.parse(file_path)
@@ -29,7 +27,8 @@ def get_mink_xml(scene_path="./scene.xml"):
 
     middle = extract_environment_from_scene(scene_path)
 
-    return begin + middle + end
+    end = """
+      </worldbody>
+    </mujoco>"""
 
-if __name__ == "__main__":
-    print(get_mink_xml())
+    return begin + middle + end

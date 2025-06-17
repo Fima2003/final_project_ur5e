@@ -1,8 +1,11 @@
 <mujoco model="ur5e scene">
-  <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets" />
-  <option gravity="0 0 -9.81" />
+  
+  <compiler angle="radian" meshdir="assets" texturedir="assets" />
+
   <include file="ur5e.xml" />
 
+  <option gravity="0 0 -9.81" />
+  
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0" />
     <global azimuth="120" elevation="-20" />
@@ -19,13 +22,17 @@
     <light pos="0 0 1.5" directional="true" />
     <geom name="floor" size="10 10 0.01" type="plane" material="grid" />
 
-    <!-- <body name="environment" pos="0 0 0.15"> -->
-    <!-- <geom name="table" type="box" size="0.77 0.375 0.15" rgba="0.5 0.5 0.5 1" /> -->
-    <!-- <geom name="wall1" type="box" size="0.77 0.01 0.3" pos="0 -.375 0.15" rgba="0.5 0.5 0.5 1"
-    />
+    <body name="environment" pos="0 0 0.15">
+      <geom name="table" type="box" size="0.77 0.375 0.15" rgba="0.5 0.5 0.5 1" contype="1"
+        conaffinity="1" />
+      <!-- <geom name="wall1" type="box" size="0.77 0.01 0.3" pos="0 -.375 0.15"
+        rgba="0.5 0.5 0.5
+      1"
+      />
       <geom name="wall2" type="box" size="0.01 0.375 0.3" pos=".77 0 0.15" rgba="0.5 0.5 0.5 1" />
       <geom name="wall3" type="box" size="0.01 0.375 0.3" pos="-.77 0 0.15" rgba="0.5 0.5 0.5 1" /> -->
-    <body name="open_box_body" pos="-0.6 0.1 0">
+    </body>
+    <body name="open_box_body" pos="-0.6 0.1 0.3">
       <geom name="open_box_bottom" type="box"
         size="0.125 0.0625 0.0025" pos="0 0 0.0025" rgba="0.6 0.6 0.8 1" />
 
@@ -41,17 +48,17 @@
       <geom name="open_box_left_wall" type="box"
         size="0.0025 0.0625 0.03375" pos="-0.1225 0 0.03375" rgba="0.5 0.5 0.7 1" />
     </body>
-    <!-- </body> -->
 
-    <body name="shark_body" pos="0.6 -0.1 0.3" quat="0.707 0 0 0.707">
+
+    <body name="shark_body" pos="0.6 -0.1 0.33" quat="0.707 0 0 0.707">
       <inertial mass="0.5"
         pos="0 0 0"
         diaginertia="0.01 0.01 0.01" />
       <freejoint />
-      <site name="shark_site" pos="0 0 0" size="0.02" rgba="0 1 0 0.3" />
       <flexcomp name="shark" type="gmsh" rgba=".8 .2 .2 1" radius="0.001" spacing="0.01 0.01 0.01"
         euler="1.5708 0 0" scale="0.001 0.001 0.001" file="meshes/salmonBasicModel_vol.msh">
-        <contact condim="1" selfcollide="none" solimp=".95 .99 .0001" solref="0.01 1"></contact>
+        <contact condim="1" selfcollide="none" solimp=".95 .99 .0001" solref="0.01 1" contype="1"
+          conaffinity="1"></contact>
         <edge damping="1" equality="true"></edge>
       </flexcomp>
     </body>

@@ -28,4 +28,4 @@ wheelhouse/
 .vscode/
 gmsh_cleaner/
 
-collision.py
+scenes/
