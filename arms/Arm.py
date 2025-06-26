@@ -13,7 +13,7 @@ class Arm:
 
         self.data = mujoco.MjData(self.model)
         self.config = mink.Configuration(self.model)
-        self.actuators=actuators
+        self.actuators = actuators
         self.additional_actuators = 1  # 1 if no hook, 2 if hook is present
 
         self.initialize()
@@ -27,6 +27,30 @@ class Arm:
             position
         )
         self.end_effector_task.set_target(target)
+
+    def simulate_configuration(self, configuration: np.array, run_for=150, stay_for=100):
+        assert len(configuration) == self.model.nu - \
+            self.additional_actuators, "Configuration length must match the number of actuators"
+        final_control = []
+        self.config.update(self.data.qpos)
+        mujoco.mj_forward(self.model, self.data)
+        arm_control = configuration[:self.actuators]
+
+        gripper_command = self.config.q[self.actuators]
+        hook_command = self.config.q[self.actuators + 1]
+
+        new_control = np.concatenate((arm_control, np.array([
+            gripper_command, hook_command] if self.additional_actuators == 2 else [gripper_command])))
+        final_control.append(new_control)
+
+        # Update the robot's state with the new control
+        self.data.qpos[:self.model.nu] = new_control
+        self.config.update(self.data.qpos)
+        mujoco.mj_forward(self.model, self.data)
+
+        final_control.extend(self._stay(run_for=stay_for))
+
+        return final_control
 
     def go(
         self,
@@ -102,8 +126,26 @@ class Arm:
 
         return final_control
 
-    def ungrip(self):
-        raise NotImplementedError("Ungrip action is not implemented")
+    def ungrip(self, run_for=150, stay_for=100):
+        final_control = []
+        self.config.update(self.data.qpos)
+        mujoco.mj_forward(self.model, self.data)
+        arm_control = self.config.q[:self.actuators]
+        hook_command = 0.2
+        gripper_command = 0
+
+        new_control = np.concatenate((arm_control, np.array([
+            gripper_command, hook_command] if self.additional_actuators == 2 else [gripper_command])))
+        final_control.append(new_control)
+
+        # Update the robot's state with the new control
+        self.data.qpos[:self.model.nu] = new_control
+        self.config.update(self.data.qpos)
+        mujoco.mj_forward(self.model, self.data)
+
+        final_control.extend(self._stay(run_for=stay_for))
+
+        return final_control
 
     def reset(self):
         """

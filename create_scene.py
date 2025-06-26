@@ -242,12 +242,18 @@ if __name__ == "__main__":
     # Fetch the scene name, environment, arm, and gripper from command line arguments
     import sys
     if len(sys.argv) != 5:
-        print("Usage: python create_scene.py <scene_name> <environment_name> <arm_name> <gripper_name>")
-        sys.exit(1)
-    scene_name = sys.argv[1]
-    environment_name = sys.argv[2]
-    arm_name = sys.argv[3]
-    gripper_name = sys.argv[4]
+        print("Creating default scene with UR5e arm and gripper.")
+        scene_name = 'lab-ur5e'
+        environment_name = 'lab'
+        arm_name = 'ur5e'
+        gripper_name = '2f85'
+        # print("Usage: python create_scene.py <scene_name> <environment_name> <arm_name> <gripper_name>")
+        # sys.exit(1)
+    else:
+        scene_name = sys.argv[1]
+        environment_name = sys.argv[2]
+        arm_name = sys.argv[3]
+        gripper_name = sys.argv[4]
     try:
         create_scene(scene_name, environment_name, arm_name, gripper_name)
         print(f"Scene {scene_name} created successfully.")

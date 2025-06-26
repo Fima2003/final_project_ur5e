@@ -122,55 +122,29 @@ def run_the_mf(robot: Arm):
         move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
         implement_control(move_control)
 
-        # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
-        robot.set_destination(
-            np.array(final_shark_body_position + [0.0, 0.35, 0.31]),
-            SO3.from_matrix(
-                np.array(
-                    [
-                        [0, 1, 0],
-                        [0, 0, -1],
-                        [-1, 0, 0]
-                    ]
-                )
-            )
-        )
-        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
-        implement_control(move_control)
-
-        # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
-        robot.set_destination(
-            np.array(final_shark_body_position + [0.0, 0.35, 0.35]),
-            SO3.from_matrix(
-                np.array(
-                    [
-                        [0, 1, 0],
-                        [0, 0, -1],
-                        [-1, 0, 0]
-                    ]
-                )
-            )
-        )
-        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
-        implement_control(move_control)
-
         # # RESET ROBOT TO INITIAL POSITION
-        # reset_control = robot.reset()
-        # implement_control(reset_control)
+        # FORWARD KINEMATICS TO POSITION [0, -1.75, 1, 0, -1.75, 0, 0]
+        # configuration = np.array([-np.pi/2, -np.pi/2, 0, 0, np.pi/2, np.pi/2])
+        # configuration_control = robot.simulate_configuration(
+        #     configuration, run_for=150, stay_for=400)
+        # implement_control(configuration_control)
 
         # # MOVE ROBOT WITH SHARK TO THE OPEN BOX
-        # robot.set_destination(
-        #     np.array(open_box_position + [0.0, -0.3, 0.3]),
-        #     SO3.from_matrix(
-        #         np.array(
-        #             [
-        #                 [0, -1, 0],
-        #                 [0, 0, 1],
-        #                 [-1, 0, 0]
-        #             ]
-        #         )
-        #     )
-        # )
+        robot.set_destination(
+            np.array(open_box_position + [0.0, -0.3, 0.3]),
+            SO3.from_matrix(
+                np.array(
+                    [
+                        [0, -1, 0],
+                        [0, 0, 1],
+                        [-1, 0, 0]
+                    ]
+                )
+            )
+        )
 
-        # move_control = robot.go(frequency=FREQUENCY, stay_for=4000)
-        # implement_control(move_control)
+        move_control = robot.go(frequency=FREQUENCY, stay_for=400)
+        implement_control(move_control)
+
+        ungrip_control = robot.ungrip(run_for=600, stay_for=3000)
+        implement_control(ungrip_control)

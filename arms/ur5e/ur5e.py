@@ -7,7 +7,6 @@ from Arm import Arm
 class UR5e(Arm):
     def __init__(self):
         super().__init__(actuators=6)
-        
 
     def initialize(self):
         self.end_effector_task: mink.FrameTask = mink.FrameTask(
