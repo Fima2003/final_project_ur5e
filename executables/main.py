@@ -51,7 +51,7 @@ def run_the_mf(robot: Arm):
         # SETUP THE CAMERA VIEW
         viewer.cam.azimuth = -90
         viewer.cam.elevation = -15
-        viewer.cam.distance = 2.0
+        viewer.cam.distance = 2.5
         viewer.cam.lookat[:] = [0.0, 0.0, 0.5]
 
         # RATE LIMITER
@@ -69,9 +69,15 @@ def run_the_mf(robot: Arm):
         # OBTAIN FISH POSITION AND ROTATION
         final_shark_body_position = data.xpos[shark_body_id].copy()
 
-        # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+        # Step 1. MOVE ROBOT TO INITIAL COMFORTABLE FOR PICKING POSITION
+        configuration = np.array([0, 1.15, 0.23, 0, 0, -np.pi/2])
+        configuration_control = robot.simulate_configuration(
+            configuration, run_for=10, stay_for=400)
+        implement_control(configuration_control)
+
+        # Step 2. SET ROBOT'S DESTINATION ABOVE SHARK'S POSITION
         robot.set_destination(
-            np.array(final_shark_body_position + [0.0, 0.35, 0.26]),
+            np.array(final_shark_body_position + [-0.02, 0.3, 0.39]),
             SO3.from_matrix(
                 np.array(
                     [
@@ -85,9 +91,9 @@ def run_the_mf(robot: Arm):
         move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
         implement_control(move_control)
 
-        # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+        # STEP 3. SET ROBOT'S DESTINATION BELOW SHARK'S POSITION
         robot.set_destination(
-            np.array(final_shark_body_position + [0.0, 0.35, 0.245]),
+            np.array(final_shark_body_position + [-0.02, 0.3, 0.1]),
             SO3.from_matrix(
                 np.array(
                     [
@@ -98,17 +104,17 @@ def run_the_mf(robot: Arm):
                 )
             )
         )
-        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+        move_control = robot.go(frequency=FREQUENCY, run_for=100, stay_for=300)
         implement_control(move_control)
 
-        # GRIPPER IN ACTION
-        grip_control = robot.grip(run_for=600, stay_for=300)
+        # STEP 4. GRIP THE FISH
+        grip_control = robot.grip(run_for=300, stay_for=300)
         implement_control(grip_control)
         print("Gripper closed, fish is caught.")
 
-        # SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
+        # STEP 5. SET ROBOT'S DESTINATION AS SLIGHTLY ABOVE SHARK'S POSITION
         robot.set_destination(
-            np.array(final_shark_body_position + [0.0, 0.35, 0.27]),
+            np.array(final_shark_body_position + [0.0, 0.35, 0.4]),
             SO3.from_matrix(
                 np.array(
                     [
@@ -119,19 +125,22 @@ def run_the_mf(robot: Arm):
                 )
             )
         )
-        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+        move_control = robot.go(frequency=FREQUENCY, run_for=100, stay_for=300)
         implement_control(move_control)
 
-        # # RESET ROBOT TO INITIAL POSITION
-        # FORWARD KINEMATICS TO POSITION [0, -1.75, 1, 0, -1.75, 0, 0]
-        # configuration = np.array([-np.pi/2, -np.pi/2, 0, 0, np.pi/2, np.pi/2])
-        # configuration_control = robot.simulate_configuration(
-        #     configuration, run_for=150, stay_for=400)
-        # implement_control(configuration_control)
+        # STEP 6. MOVE ROBOT WITH SHARK TO THE COMFORTABLE POSITION
+        configuration = np.array([
+            0, 1.15, 0.23, 0,
+            move_control[100][4],
+            move_control[100][5]
+        ])
+        configuration_control = robot.simulate_configuration(
+            configuration, run_for=10, stay_for=400)
+        implement_control(configuration_control)
 
-        # # MOVE ROBOT WITH SHARK TO THE OPEN BOX
+        # STEP 7. MOVE ROBOT WITH SHARK TO THE OPEN BOX
         robot.set_destination(
-            np.array(open_box_position + [0.0, -0.3, 0.3]),
+            np.array(open_box_position + [0, -0.26, 0.6]),
             SO3.from_matrix(
                 np.array(
                     [
@@ -142,9 +151,41 @@ def run_the_mf(robot: Arm):
                 )
             )
         )
-
-        move_control = robot.go(frequency=FREQUENCY, stay_for=400)
+        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
         implement_control(move_control)
-
+        
+        # STEP 8. LOWER ROBOT WITH SHARK TO THE OPEN BOX
+        robot.set_destination(
+            np.array(open_box_position + [0, -0.3, 0.6]),
+            SO3.from_matrix(
+                np.array(
+                    [
+                        [0, -1, 0],
+                        [0, 0, 1],
+                        [-1, 0, 0]
+                    ]
+                )
+            )
+        )
+        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+        implement_control(move_control)
+        
+        # STEP 8. LOWER ROBOT WITH SHARK TO THE OPEN BOX
+        robot.set_destination(
+            np.array(open_box_position + [0, -0.3, 0.4]),
+            SO3.from_matrix(
+                np.array(
+                    [
+                        [0, -1, 0],
+                        [0, 0, 1],
+                        [-1, 0, 0]
+                    ]
+                )
+            )
+        )
+        move_control = robot.go(frequency=FREQUENCY, run_for=300, stay_for=300)
+        implement_control(move_control)
+        
+        # STEP 9. UNGRIP CONTROL
         ungrip_control = robot.ungrip(run_for=600, stay_for=3000)
         implement_control(ungrip_control)

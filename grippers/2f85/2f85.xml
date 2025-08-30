@@ -123,41 +123,38 @@
                                 pos="0 0 0"
                                 quat="1 0 0 0"
                                 rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
-                            <geom
-                                name="right_base_link_collision"
-                                class="custom_gripper/collision"
-                                mesh="right_base_link_collision"
-                                pos="0 0 0"
-                                quat="1 0 0 0"
-                            />
+                            <geom name="right_base_link_collision_vertical" type="box" group="5"
+                                contype="1"
+                                conaffinity="1"
+                                pos="0.06 0.001 0.03" quat="1 0 0 0" size="0.06 0.002 0.027" />
                             <!-- Hook -->
                             <!-- <body name="hook_link" pos="0.042 0.009 0.053" quat="1 0 0 0">
                                 <inertial
-                                  pos="0.0100000000000002 0.05411684085681 -0.00324110579044801"
-                                  mass="0.0113951382962291"
-                                  diaginertia="1.05893195534218E-05 8.14301615510424E-07 1.05346938243266E-05" />
+                                    pos="0.0100000000000002 0.05411684085681 -0.00324110579044801"
+                                    mass="0.0113951382962291"
+                                    diaginertia="1.05893195534218E-05 8.14301615510424E-07 1.05346938243266E-05" />
                                 <geom
-                                  name="hook_link_visual"
-                                  class="custom_gripper/visual"
-                                  mesh="hook_link"
-                                  pos="0 0 0"
-                                  quat="1 0 0 0"
-                                  rgba="1 0.937254901960784 0.137254901960784 1"
+                                    name="hook_link_visual"
+                                    class="custom_gripper/visual"
+                                    mesh="hook_link"
+                                    pos="0 0 0"
+                                    quat="1 0 0 0"
+                                    rgba="1 0.937254901960784 0.137254901960784 1"
                                 />
                                 <geom
-                                  name="hook_link_collision"
-                                  class="custom_gripper/collision"
-                                  mesh="hook_link_collision"
-                                  pos="0 0 0"
-                                  quat="1 0 0 0"
+                                    name="hook_link_collision"
+                                    class="custom_gripper/collision"
+                                    mesh="hook_link_collision"
+                                    pos="0 0 0"
+                                    quat="1 0 0 0"
                                 />
                                 <joint
-                                  name="hook_joint"
-                                  type="hinge"
-                                  axis="-1 0 0"
-                                  pos="0 0 0"
-                                  range="0 0.62831" />
-                              </body> -->
+                                    name="hook_joint"
+                                    type="hinge"
+                                    axis="-1 0 0"
+                                    pos="0 0 0"
+                                    range="0 0.62831" />
+                            </body> -->
                         </body>
                     </body>
                 </body>
@@ -200,12 +197,16 @@
                                 pos="0 0 0"
                                 quat="1 0 0 0"
                                 rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
-                            <geom name="left_base_link_collision"
-                                mesh="left_base_link_collision"
-                                class="custom_gripper/collision"
-                                pos="0 0 0"
-                                quat="1 0 0 0"
-                            />
+                            <geom name="left_base_link_collision_horizontal" type="box" group="5"
+                                contype="1"
+                                conaffinity="1"
+                                condim="3"
+                                pos="0.038 0.06 0.00" quat="1 0 0 0" size="0.038 0.06 0.001"
+                                friction="1 0.005 0.0001" />
+                            <geom name="left_base_link_collision_vertical" type="box" group="5"
+                                contype="1"
+                                conaffinity="1"
+                                pos="0.003 0.06 0.03" quat="1 0 0 0" size="0.002 0.06 0.027" />
                         </body>
                     </body>
                 </body>
@@ -245,5 +246,6 @@
             ctrlrange="0 1"
             gainprm="80 0 0"
             biasprm="0 -100 -10" />
+        <!-- <position class="custom_gripper" name="hook_actuator" joint="hook_joint" /> -->
     </actuator>
 </mujoco>

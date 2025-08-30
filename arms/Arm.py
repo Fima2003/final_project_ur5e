@@ -110,7 +110,7 @@ class Arm:
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data)
         arm_control = self.config.q[:self.actuators]
-        hook_command = 0.2
+        hook_command = 0.22
         gripper_command = 1
 
         new_control = np.concatenate((arm_control, np.array([
@@ -134,7 +134,7 @@ class Arm:
         hook_command = 0.2
         gripper_command = 0
 
-        new_control = np.concatenate((arm_control, np.array([
+        new_control = np.concatenate((arm_control[:len(arm_control)-1], np.array([-np.pi/2-np.pi/4]), np.array([
             gripper_command, hook_command] if self.additional_actuators == 2 else [gripper_command])))
         final_control.append(new_control)
 

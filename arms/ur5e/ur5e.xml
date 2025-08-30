@@ -61,13 +61,14 @@
   </asset>
 
   <worldbody>
-    <body name="base" childclass="ur5e">
+    <light name="light1" pos="0 0 2" dir="0 0 -1" diffuse="1 1 1" specular="0.5 0.5 0.5" />
+    <body name="base" childclass="ur5e" quat="1 0 0 1">
       <inertial mass="4.0" pos="0 0 0" diaginertia="0.00443333156 0.00443333156 0.0072" />
       <geom mesh="base_0" material="black" class="visual" />
       <geom mesh="base_1" material="jointgray" class="visual" />
       <body name="shoulder_link" pos="0 0 0.163">
         <inertial mass="3.7" pos="0 0 0" diaginertia="0.0102675 0.0102675 0.00666" />
-        <joint name="shoulder_pan_joint" class="size3" axis="0 0 1" />
+        <joint name="shoulder_pan_joint" class="size3" axis="0 0 1" damping="1" />
         <geom mesh="shoulder_0" material="urblue" class="visual" />
         <geom mesh="shoulder_1" material="black" class="visual" />
         <geom mesh="shoulder_2" material="jointgray" class="visual" />
@@ -122,7 +123,8 @@
   </worldbody>
 
   <actuator>
-    <general class="size3" name="shoulder_pan" joint="shoulder_pan_joint" />
+    <general class="size3" name="shoulder_pan" joint="shoulder_pan_joint" forcerange="-18 24"
+      forcelimited="true" />
     <general class="size3" name="shoulder_lift" joint="shoulder_lift_joint" />
     <general class="size3_limited" name="elbow" joint="elbow_joint" />
     <general class="size1" name="wrist_1" joint="wrist_1_joint" />
