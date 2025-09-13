@@ -23,6 +23,7 @@ wheelhouse/
 
 # Logs
 *.log
+.idea/
 
 # vscode
 .vscode/
@@ -33,7 +34,6 @@ scenes/
 reserch_code/
 robots_urdf/
 
-URBasic/
 URConnect/
 URplus/
 
