@@ -26,12 +26,6 @@ class Arm:
 
     def initialize(self):
         raise Exception("This method should be overridden in subclasses")
-    
-    def set_control(self, control):
-        self.data.ctrl = control.copy()
-        for i in range(1000):
-            mujoco.mj_step(self.model, self.data) # type: ignore
-        self.config.update(self.data.qpos)
         
 
     def set_destination(self, position, rotation: mink.SO3 = mink.SO3.from_rpy_radians(0, np.pi, np.pi/2)):
@@ -66,68 +60,44 @@ class Arm:
                 print(np.linalg.norm(err[:3]))
                 print("Achieved target earlier")
                 break
-
         
         self.data.ctrl = self.config.q[:self.model.nu]
         mujoco.mj_forward(self.model, self.data) # type: ignore
         return self.config.q[:self.model.nu]
 
-    def _stay(self, run_for=150):
-        final_control = []
-        mujoco.mj_forward(self.model, self.data) # type: ignore
-
-        # Preserve the current gripper and hook state
-        nu = self.model.nu
-        gripper_hook_state = self.data.qpos[nu -
-                                            self.additional_actuators:nu].copy()
-        arm_state = self.config.q[:nu-self.additional_actuators].copy()
-        full_state = np.concatenate((arm_state, gripper_hook_state))
-
-        for _ in range(run_for):
-            final_control.append(full_state.copy())
-            self.data.ctrl = full_state.copy()
-            mujoco.mj_step(self.model, self.data) # type: ignore
-
-        return final_control
-
-    def grip(self, run_for=150, stay_for=100):
-        final_control = []
+    def grip(self):
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data) # type: ignore
         arm_control = self.config.q[:self.actuators]
         hook_command = 0.22
         gripper_command = 1
+        extra_commands = [gripper_command, hook_command]
 
-        new_control = np.concatenate((arm_control, np.array([
-            gripper_command, hook_command] if self.additional_actuators == 2 else [gripper_command])))
-        final_control.append(new_control)
+        new_control = np.concatenate((
+            arm_control,
+            np.array(extra_commands[:self.additional_actuators])
+        ))
 
         # Update the robot's state with the new control
         self.data.qpos[:self.model.nu] = new_control
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data) # type: ignore
 
-        final_control.extend(self._stay(run_for=stay_for))
-
-        return final_control
-
-    def release(self, run_for=150, stay_for=100):
+    def release(self):
         final_control = []
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data) # type: ignore
         arm_control = self.config.q[:self.actuators]
         hook_command = 0.2
         gripper_command = 0
+        extra_commands = [gripper_command, hook_command]
 
-        new_control = np.concatenate((arm_control[:len(arm_control)-1], np.array([-np.pi/2-np.pi/4]), np.array([
-            gripper_command, hook_command] if self.additional_actuators == 2 else [gripper_command])))
-        final_control.append(new_control)
+        new_control = np.concatenate((
+            arm_control,
+            np.array(extra_commands[:self.additional_actuators])
+        ))
 
         # Update the robot's state with the new control
         self.data.qpos[:self.model.nu] = new_control
         self.config.update(self.data.qpos)
         mujoco.mj_forward(self.model, self.data) # type: ignore
-
-        final_control.extend(self._stay(run_for=stay_for))
-
-        return final_control

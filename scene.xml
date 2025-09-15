@@ -1,5 +1,5 @@
 <mujoco>
-    <include file="robot_vertical.xml" />
+    <include file="robot_empty.xml" />
     <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets"
         balanceinertia="true" />
     <option gravity="0 0 -9.81" />

@@ -27,35 +27,5 @@ wheelhouse/
 
 # vscode
 .vscode/
-gmsh_cleaner/
 
-scenes/
-
-reserch_code/
-robots_urdf/
-
-URConnect/
-URplus/
-
-angle_transformation.py
-Control.py
-displacement.py
-gripper_test.py
-help_funcs.py
-main_test_no_try.py
-main.py
-node_class.py
-path_planner.py
-pathforvisionelastica.py
-planner.py
-plot_test.py
-realsence_film_script.py
-robotiq_preamble.py
-testpath.py
-testpathwithpipeline.py
-ur5e_gripper_*
-utils_pipeline.py
-utils.py
-video_film_script.py
-
-connect_real_simulation*
+URConnect

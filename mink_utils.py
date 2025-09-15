@@ -5,7 +5,7 @@ def get_mink_xml(scene_path):
     begin = """
     <mujoco model="ur5e scene">
       <compiler angle="radian" meshdir="assets" autolimits="true" texturedir="assets" />
-      <include file="robot.xml" />
+      <include file="robot_empty.xml" />
 
       <asset>
         <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512"
