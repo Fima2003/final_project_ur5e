@@ -128,7 +128,7 @@ print(f"Moving the robot to the initial joints: {robot_joints}")
 plots = simulate_robot_joints(robot, joint_positions=robot_joints, a=0.3, v=0.1, wait=True)
 # Assume always returns plots
 assert plots is not None, "simulate_robot_joints returned None unexpectedly"
-joint_position, joint_velocity, tcp_pose, tcp_velocity, times = plots
+tcp_pose, tcp_velocity, joint_position, joint_velocity, times = plots
 robot_plots.append(PlotData(
     joint_position=joint_position,
     joint_speed=joint_velocity,

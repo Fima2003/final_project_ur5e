@@ -216,6 +216,25 @@ def plot_comparison(combined: dict, out_dir: Path):
     Tm, Jm, Vm, Tpm, Tvm = M['T'], M['JP'], M['JV'], M['TP'], M['TV']
     boundaries = R['boundaries']
 
+    # --- Align lengths within each data source (robot, mujoco) to avoid mismatched x/y lengths ---
+    def _truncate_common(T: np.ndarray, *arrays: np.ndarray):
+        lengths = [len(T)] + [a.shape[0] for a in arrays if a.size > 0]
+        if not lengths:
+            return T, arrays
+        common = min(lengths)
+        if common == len(T) and all(a.shape[0] == common for a in arrays if a.size > 0):
+            return T, arrays
+        # Warn once
+        print(f"[plot_comparison] Warning: truncating to common length {common} (time={len(T)}, arrays={[a.shape[0] for a in arrays]})")
+        T_new = T[:common]
+        arrays_new = tuple(a[:common] if a.shape[0] >= common else a for a in arrays)
+        return T_new, arrays_new
+
+    # Truncate robot series
+    Tr, (Jr, Vr, Tpr, Tvr) = _truncate_common(Tr, Jr, Vr, Tpr, Tvr)
+    # Truncate mujoco series
+    Tm, (Jm, Vm, Tpm, Tvm) = _truncate_common(Tm, Jm, Vm, Tpm, Tvm)
+
     def draw_boundaries(axs):
         ax_list = axs if isinstance(axs, (list, tuple, np.ndarray)) else [axs]
         bnds = boundaries[:-1] if len(boundaries) > 1 else []
