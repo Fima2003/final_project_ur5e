@@ -232,21 +232,25 @@ def plot_comparison(combined: dict, out_dir: Path):
     if Tpr.size > 0 or Tpm.size > 0:
         fig, axs = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
         labels = ['x', 'y', 'z']
+        cmap = plt.get_cmap('tab10')
+        pose_colors = [cmap(i) for i in range(6)]  # reuse colors for pos (0-2) and rot (3-5)
         for i in range(3):
+            color = pose_colors[i]
             if Tpr.size > 0:
-                axs[0].plot(Tr, Tpr[:, i], label=f'Robot {labels[i]}', linestyle='-')
+                axs[0].plot(Tr, Tpr[:, i], label=f'Robot {labels[i]}', linestyle='-', color=color)
             if Tpm.size > 0:
-                axs[0].plot(Tm, Tpm[:, i], label=f'Mujoco {labels[i]}', linestyle='--')
+                axs[0].plot(Tm, Tpm[:, i], label=f'Mujoco {labels[i]}', linestyle='--', color=color)
         axs[0].set_ylabel('Position [m]')
         axs[0].grid(True, alpha=0.3)
         axs[0].legend(ncols=3, fontsize=8)
 
         labels_r = ['rx', 'ry', 'rz']
         for i in range(3):
+            color = pose_colors[3 + i]
             if Tpr.size > 0:
-                axs[1].plot(Tr, Tpr[:, 3 + i], label=f'Robot {labels_r[i]}', linestyle='-')
+                axs[1].plot(Tr, Tpr[:, 3 + i], label=f'Robot {labels_r[i]}', linestyle='-', color=color)
             if Tpm.size > 0:
-                axs[1].plot(Tm, Tpm[:, 3 + i], label=f'Mujoco {labels_r[i]}', linestyle='--')
+                axs[1].plot(Tm, Tpm[:, 3 + i], label=f'Mujoco {labels_r[i]}', linestyle='--', color=color)
         axs[1].set_xlabel('Time [s]')
         axs[1].set_ylabel('Rotation vector [rad]')
         axs[1].grid(True, alpha=0.3)
