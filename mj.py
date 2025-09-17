@@ -272,7 +272,7 @@ if __name__ == "__main__":
         rate.sleep()
     print(f"Shark's initial position={shark_body_position}")
 
-    actions, initial_pose_pre = get_actions(shark_body_position, open_box_position, twin, poly_order=5, time_for_trajectory=10.0)
+    actions, initial_pose_pre = get_actions(shark_body_position, open_box_position, twin)
     
     _, joint_position, joint_velocity, tcp_pose, tcp_velocity, times = simulate_mujoco(
         data,

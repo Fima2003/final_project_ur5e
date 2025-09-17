@@ -277,11 +277,14 @@ def plot_comparison(combined: dict, out_dir: Path):
     # Joint Position comparison
     if Jr.size > 0 or Jm.size > 0:
         fig, ax = plt.subplots(figsize=(12, 5))
+        cmap = plt.get_cmap('tab10')
+        joint_colors = [cmap(i) for i in range(10)]
         for i in range(6):
+            color = joint_colors[i % len(joint_colors)]
             if Jr.size > 0:
-                ax.plot(Tr, Jr[:, i], label=f'Robot J{i+1}', linestyle='-')
+                ax.plot(Tr, Jr[:, i], label=f'Robot J{i+1}', linestyle='-', color=color)
             if Jm.size > 0:
-                ax.plot(Tm, Jm[:, i], label=f'Mujoco J{i+1}', linestyle='--')
+                ax.plot(Tm, Jm[:, i], label=f'Mujoco J{i+1}', linestyle='--', color=color)
         ax.set_xlabel('Time [s]')
         ax.set_ylabel('Joint position [rad]')
         ax.grid(True, alpha=0.3)
@@ -294,11 +297,14 @@ def plot_comparison(combined: dict, out_dir: Path):
     # Joint Speed comparison
     if Vr.size > 0 or Vm.size > 0:
         fig, ax = plt.subplots(figsize=(12, 5))
+        cmap = plt.get_cmap('tab10')
+        joint_colors = [cmap(i) for i in range(10)]
         for i in range(6):
+            color = joint_colors[i % len(joint_colors)]
             if Vr.size > 0:
-                ax.plot(Tr, Vr[:, i], label=f'Robot J{i+1}', linestyle='-')
+                ax.plot(Tr, Vr[:, i], label=f'Robot J{i+1}', linestyle='-', color=color)
             if Vm.size > 0:
-                ax.plot(Tm, Vm[:, i], label=f'Mujoco J{i+1}', linestyle='--')
+                ax.plot(Tm, Vm[:, i], label=f'Mujoco J{i+1}', linestyle='--', color=color)
         ax.set_xlabel('Time [s]')
         ax.set_ylabel('Joint speed [rad/s]')
         ax.grid(True, alpha=0.3)
